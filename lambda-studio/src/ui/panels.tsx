@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStore, currentTerm, shareLink } from './store';
 import { useExport } from './ExportDialog';
+import { inferType, typeTex } from '../core/types';
 import { printNamed, type Printed } from '../core/formats/named';
 import { makeFolder } from '../core/fold';
 import { findRedex, STRATEGIES, type Strategy } from '../core/reduce';
@@ -107,6 +108,7 @@ export function Inspector() {
   const eta = useStore((s) => s.settings.eta);
   const strategy = useStore((s) => s.settings.strategy);
   const stats = useMemo(() => (term && size(term) < 200000 ? termStats(term, eta) : null), [term, eta]);
+  const typed = useMemo(() => (term && size(term) < 20000 ? inferType(term) : null), [term]);
   if (!term || !stats) return <div className="panel inspector"><div className="panel-head"><h2>Inspector</h2></div><div className="empty">—</div></div>;
   const strat = STRATEGIES.find((s) => s.id === strategy)!;
   const values = [...stats.decoded.map((d) => d.text), ...(stats.normal && stats.closed ? describeMore(term) : [])];
@@ -120,10 +122,21 @@ export function Inspector() {
         <dt>Depth</dt><dd>{stats.depth}</dd>
         <dt>BLC</dt><dd>{stats.blcBits === null ? '— (free names)' : `${stats.blcBits} bits`}</dd>
         <dt>Closed</dt><dd>{stats.closed ? 'yes (combinator)' : `no${stats.freeNames.length ? ` · free: ${stats.freeNames.join(', ')}` : ''}${stats.danglingIndices ? ` · ${stats.danglingIndices} open index` : ''}`}</dd>
+        <dt>Type</dt><dd>{!typed ? '— (term too large)' : typed.ok ? <TypeView text={typed.value.text} tex={typeTex(typed.value.type)} prop={typed.value.prop} /> : <span className="muted" title={typed.reason}>not simply typable</span>}</dd>
         <dt>Strategy</dt><dd title={strat.description}>{strat.name}</dd>
       </dl>
       <p className="hint">{strat.description}</p>
     </div>
+  );
+}
+
+function TypeView({ text, tex, prop }: { text: string; tex: string; prop: string }) {
+  const [asTex] = useTexSetting('current');
+  return (
+    <span className="type-view">
+      {asTex && text.length < 400 ? <TexView tex={tex} /> : <code>{text}</code>}
+      <span className="muted" title="Curry–Howard: a type read as a proposition of implicational logic. Every simply typed closed term proves its type."> · as a proposition: {prop}</span>
+    </span>
   );
 }
 

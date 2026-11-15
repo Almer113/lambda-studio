@@ -7,8 +7,9 @@ import { useApplyTheme } from './theme';
 import { SourcePreview } from './SourcePreview';
 import { useStore } from './store';
 import { ExportDialog } from './ExportDialog';
+import { ToolsPanel } from './tools';
 
-type Tab = 'edit' | 'diagram' | 'convert' | 'library';
+type Tab = 'edit' | 'diagram' | 'tools' | 'convert' | 'library';
 
 export function App() {
   useApplyTheme();
@@ -19,7 +20,7 @@ export function App() {
     <div className="app" data-tab={tab}>
       <Header />
       <nav className="tabs" aria-label="Sections">
-        {(['edit', 'diagram', 'convert', 'library'] as Tab[]).map((t) => (
+        {(['edit', 'diagram', 'tools', 'convert', 'library'] as Tab[]).map((t) => (
           <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{t[0].toUpperCase() + t.slice(1)}</button>
         ))}
       </nav>
@@ -40,6 +41,7 @@ export function App() {
           <CurrentTerm />
           <Controls />
           <DiagramView />
+          <ToolsPanel />
         </section>
         <aside className="col-right">
           <Inspector />

@@ -35,7 +35,12 @@ export interface Settings {
   clAlgorithm: Algorithm;
   /** Which notation groups are expanded. */
   openGroups: Record<string, boolean>;
+  /** Open tab of the Tools panel. */
+  toolsTab: ToolsTab;
+  /** Use the WYSIWYG math editor for expressions. */
+  mathEditor: boolean;
 }
+export type ToolsTab = 'expr' | 'truth' | 'table' | 'laws' | 'data' | 'generate';
 
 export const DEFAULT_SETTINGS: Settings = {
   strategy: 'normal', eta: false, singleLetter: false, foldNames: true, numerals: true, zeroAs: '0',
@@ -45,6 +50,8 @@ export const DEFAULT_SETTINGS: Settings = {
   sourcePreview: true,
   clAlgorithm: 'turner',
   openGroups: { lambda: true, combinators: true, code: true, bits: true },
+  toolsTab: 'expr',
+  mathEditor: false,
 };
 
 export interface Entry {

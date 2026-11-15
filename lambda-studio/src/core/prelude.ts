@@ -25,6 +25,10 @@ export const PRELUDE: PreludeEntry[] = [
   { group: 'Booleans', name: 'AND', src: 'λp q.p q p', doc: 'Conjunction', fold: true },
   { group: 'Booleans', name: 'OR', src: 'λp q.p p q', doc: 'Disjunction', fold: true },
   { group: 'Booleans', name: 'XOR', src: 'λp q.p (NOT q) q', doc: 'Exclusive or', fold: true },
+  { group: 'Booleans', name: 'IMPLIES', src: 'λp q.p q TRUE', doc: 'Implication p → q', fold: true },
+  { group: 'Booleans', name: 'IFF', src: 'λp q.p q (NOT q)', doc: 'Equivalence p ↔ q (XNOR)', fold: true },
+  { group: 'Booleans', name: 'NAND', src: 'λp q.NOT (AND p q)', doc: 'Not both' },
+  { group: 'Booleans', name: 'NOR', src: 'λp q.NOT (OR p q)', doc: 'Neither' },
 
   // Numerals
   { group: 'Numerals', name: 'SUCC', src: 'λn f x.f (n f x)', doc: 'Successor', fold: true },
@@ -35,7 +39,13 @@ export const PRELUDE: PreludeEntry[] = [
   { group: 'Numerals', name: 'SUB', src: 'λm n.n PRED m', doc: 'Truncated subtraction', fold: true },
   { group: 'Numerals', name: 'ISZERO', src: 'λn.n (λx.FALSE) TRUE', doc: 'Zero test', fold: true },
   { group: 'Numerals', name: 'LEQ', src: 'λm n.ISZERO (SUB m n)', doc: 'Less than or equal', fold: true },
+  { group: 'Numerals', name: 'LT', src: 'λm n.NOT (LEQ n m)', doc: 'Less than', fold: true },
+  { group: 'Numerals', name: 'GT', src: 'λm n.NOT (LEQ m n)', doc: 'Greater than', fold: true },
+  { group: 'Numerals', name: 'GEQ', src: 'λm n.LEQ n m', doc: 'Greater than or equal', fold: true },
+  { group: 'Numerals', name: 'NEQ', src: 'λm n.NOT (EQ m n)', doc: 'Not equal', fold: true },
   { group: 'Numerals', name: 'EQ', src: 'λm n.AND (LEQ m n) (LEQ n m)', doc: 'Equality of numerals', fold: true },
+  { group: 'Numerals', name: 'DIV', src: 'λm n.LT m n 0 (SUCC (DIV (SUB m n) n))', doc: 'Integer division (recursive; DIV m 0 has no normal form)', fold: true },
+  { group: 'Numerals', name: 'MOD', src: 'λm n.LT m n m (MOD (SUB m n) n)', doc: 'Remainder (recursive; MOD m 0 has no normal form)', fold: true },
   { group: 'Numerals', name: 'FACT', src: 'λn.ISZERO n 1 (MULT n (FACT (PRED n)))', doc: 'Factorial (recursive definition, compiled with Y)', fold: true },
   { group: 'Numerals', name: 'FIB', src: 'λn.LEQ n 1 n (PLUS (FIB (PRED n)) (FIB (PRED (PRED n))))', doc: 'Fibonacci (recursive, slow!)', fold: true },
 
