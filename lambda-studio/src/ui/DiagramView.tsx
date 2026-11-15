@@ -1,42 +1,23 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { type Diagram, type Segment, layout } from '../core/diagram/layout';
-import { segmentRect, toSVG } from '../core/diagram/svg';
-import { type Term, type Path, depthAt } from '../core/term';
-import { useStore, currentTerm, type ColorMode } from './store';
+import { type Diagram, type Segment, type DiagramStyle } from '../core/diagram/layout';
+import { segmentRect } from '../core/diagram/svg';
+import { type Term, type Path } from '../core/term';
+import { type ColorMode, COLOR_MODES, segmentColor } from '../core/diagram/colors';
+import { useStore, currentTerm } from './store';
+import { type View, fitView, layoutSafe, stepMorph, morphFrame, paint, highlightColors } from './render';
+import { useExport } from './ExportDialog';
 import { findRedex } from '../core/reduce';
 import { useIsDark } from './theme';
 
 const SVG_LIMIT = 12000; // segments; above this we draw on a canvas without hover
+const ANIM_LIMIT = 5000; // segments (before + after) for the step animation
 
-function hueOf(path: string): number {
-  let h = 2166136261;
-  for (let k = 0; k < path.length; k++) h = Math.imul(h ^ path.charCodeAt(k), 16777619);
-  return ((h >>> 0) % 360);
+export { segmentColor };
+
+export function useDiagram(term: Term | null, style: DiagramStyle): Diagram | null {
+  return useMemo(() => (term ? layoutSafe(term, style) : null), [term, style]);
 }
 
-export function segmentColor(s: Segment, mode: ColorMode, dark: boolean): string {
-  const fg = dark ? '#e8e6e3' : '#1d1d1f';
-  if (mode === 'mono') return fg;
-  const L = dark ? 68 : 42, S = dark ? 70 : 65;
-  if (mode === 'binder') {
-    if (s.kind === 'app') return dark ? '#8a8f98' : '#6b7280';
-    const key = s.kind === 'lam' ? s.path : s.binder;
-    if (key === null || key === undefined) return dark ? '#f87171' : '#dc2626';
-    return `hsl(${hueOf(key + '#')}, ${S}%, ${L}%)`;
-  }
-  // depth
-  const d = s.kind === 'lam' ? depthAt(s.path) : s.kind === 'var' && s.binder != null ? depthAt(s.binder) : depthAt(s.path);
-  return `hsl(${(200 + d * 37) % 360}, ${S}%, ${L}%)`;
-}
-
-export function useDiagram(term: Term | null): Diagram | null {
-  return useMemo(() => {
-    if (!term) return null;
-    try { return layout(term); } catch { return null; }
-  }, [term]);
-}
-
-interface View { scale: number; tx: number; ty: number }
 
 export function DiagramView() {
   const term = useStore(currentTerm);
@@ -46,7 +27,13 @@ export function DiagramView() {
   const setHover = useStore((s) => s.setHover);
   const reduceAt = useStore((s) => s.reduceAt);
   const dark = useIsDark();
-  const diagram = useDiagram(term);
+  const diagram = useDiagram(term, settings.diagramStyle);
+  const history = useStore((s) => s.history);
+  const index = useStore((s) => s.index);
+  const playing = useStore((s) => s.playing);
+  const animRef = useRef<HTMLCanvasElement>(null);
+  const [animating, setAnimating] = useState(false);
+  const shown = useRef<{ index: number; term: Term | null; diagram: Diagram | null; view: View } | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [view, setView] = useState<View>({ scale: 1, tx: 0, ty: 0 });
@@ -59,11 +46,7 @@ export function DiagramView() {
   const fit = useCallback(() => {
     const el = wrap.current;
     if (!el || !diagram) return;
-    const W = el.clientWidth, H = el.clientHeight;
-    const dw = diagram.width + 4, dh = diagram.height - diagram.top + 4;
-    let scale = Math.max(0.05, Math.min(40, Math.min(W / dw, H / dh)));
-    if (scale >= 2) scale = Math.floor(scale); // whole pixels keep the lines crisp
-    setView({ scale, tx: (W - diagram.width * scale) / 2, ty: (H - (diagram.height + diagram.top) * scale) / 2 });
+    setView(fitView(diagram, el.clientWidth, el.clientHeight));
   }, [diagram]);
 
   useEffect(() => { if (autoFit) fit(); }, [diagram, autoFit, fit]);
@@ -74,6 +57,48 @@ export function DiagramView() {
     ro.observe(el);
     return () => ro.disconnect();
   }, [autoFit, fit]);
+
+  // Animate a single β-step: morph the previous diagram into the new one on a canvas overlay.
+  useEffect(() => {
+    const prev = shown.current;
+    const el = wrap.current, c = animRef.current;
+    const entry = history[index];
+    const newView = autoFit && el && diagram ? fitView(diagram, el.clientWidth, el.clientHeight) : view;
+    shown.current = { index, term, diagram, view: newView };
+    if (!settings.animate || !prev || !el || !c || !diagram || !prev.diagram || useCanvas) return;
+    if (index !== prev.index + 1 || entry?.via?.kind !== 'beta' || entry.via.path === undefined || history[index - 1]?.term !== prev.term) return;
+    if (prev.diagram.segments.length + diagram.segments.length > ANIM_LIMIT) return;
+    const duration = playing ? Math.min(700, 850 / settings.playSpeed) : 700;
+    if (duration < 120 || document.hidden) return;
+    const m = stepMorph(prev.term!, entry.via.path, prev.diagram, diagram, prev.view, newView, settings.colorMode, dark);
+    if (!m) return;
+    const dpr = window.devicePixelRatio || 1;
+    const W = el.clientWidth, H = el.clientHeight;
+    c.width = W * dpr; c.height = H * dpr;
+    const ctx = c.getContext('2d')!;
+    const hl = settings.showRedex ? highlightColors(dark) : null;
+    const t0 = performance.now();
+    let raf = 0;
+    setAnimating(true);
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - t0) / duration);
+      paint(ctx, [], null, c.width, c.height);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      for (const r of morphFrame(m, t, hl)) {
+        ctx.globalAlpha = r.alpha; ctx.fillStyle = r.color;
+        ctx.fillRect(r.x, r.y, Math.max(r.w, 1), Math.max(r.h, 1));
+      }
+      ctx.globalAlpha = 1;
+      if (t < 1) raf = requestAnimationFrame(tick); else setAnimating(false);
+    };
+    raf = requestAnimationFrame(tick);
+    // requestAnimationFrame pauses in background tabs: never leave the diagram hidden
+    const failsafe = window.setTimeout(() => { cancelAnimationFrame(raf); setAnimating(false); }, duration + 300);
+    return () => { cancelAnimationFrame(raf); clearTimeout(failsafe); setAnimating(false); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index, diagram]);
+
+  useEffect(() => { if (shown.current && shown.current.diagram === diagram) shown.current.view = view; }, [view, diagram]);
 
   // Base layer as an HTML string (fast for thousands of rects).
   const baseHtml = useMemo(() => {
@@ -154,27 +179,6 @@ export function DiagramView() {
     return () => el.removeEventListener('wheel', onWheel);
   }, []);
 
-  const exportSVG = () => {
-    if (!diagram) return;
-    const svg = toSVG(diagram, { scale: 8, background: dark ? '#111' : '#fff', color: (s) => segmentColor(s, settings.colorMode, dark) });
-    download(new Blob([svg], { type: 'image/svg+xml' }), 'lambda-diagram.svg');
-  };
-  const exportPNG = () => {
-    if (!diagram) return;
-    const scale = Math.max(1, Math.min(16, Math.floor(4000 / Math.max(diagram.width, diagram.height))));
-    const svg = toSVG(diagram, { scale, background: dark ? '#111' : '#fff', color: (s) => segmentColor(s, settings.colorMode, dark) });
-    const img = new Image();
-    img.onload = () => {
-      const c = document.createElement('canvas');
-      c.width = img.width; c.height = img.height;
-      const ctx = c.getContext('2d')!;
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(img, 0, 0);
-      c.toBlob((b) => b && download(b, 'lambda-diagram.png'));
-    };
-    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
-  };
-
   const hoveredSegment = hover !== null && diagram ? diagram.segments.find((s) => s.path === hover) : undefined;
 
   return (
@@ -182,17 +186,19 @@ export function DiagramView() {
       <div className="panel-head">
         <h2>Tromp diagram</h2>
         <div className="toolbar">
-          <select aria-label="Colour mode" value={settings.colorMode} onChange={(e) => useStore.getState().setSetting('colorMode', e.target.value as ColorMode)}>
-            <option value="binder">Colour by binder</option>
-            <option value="depth">Colour by depth</option>
-            <option value="mono">Monochrome</option>
+          <select aria-label="Diagram style" value={settings.diagramStyle} onChange={(e) => useStore.getState().setSetting('diagramStyle', e.target.value as DiagramStyle)} title="Standard: lines for every variable reach the bottom. Alternative: Tromp's compact style, applications link right next to their parts.">
+            <option value="standard">Standard</option>
+            <option value="alternative">Alternative</option>
           </select>
+          <select aria-label="Colour mode" value={settings.colorMode} onChange={(e) => useStore.getState().setSetting('colorMode', e.target.value as ColorMode)}>
+            {COLOR_MODES.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+          <label className="check" title="Animate single β-steps"><input type="checkbox" checked={settings.animate} onChange={(e) => useStore.getState().setSetting('animate', e.target.checked)} /> Animate</label>
           <label className="check"><input type="checkbox" checked={settings.showRedex} onChange={(e) => useStore.getState().setSetting('showRedex', e.target.checked)} /> Next redex</label>
           <button onClick={() => { setAutoFit(true); fit(); }} title="Fit to view">Fit</button>
           <button onClick={() => { setAutoFit(false); setView((v) => ({ ...v, scale: v.scale * 1.25 })); }} title="Zoom in">+</button>
           <button onClick={() => { setAutoFit(false); setView((v) => ({ ...v, scale: v.scale / 1.25 })); }} title="Zoom out">−</button>
-          <button onClick={exportSVG} disabled={!diagram}>SVG</button>
-          <button onClick={exportPNG} disabled={!diagram}>PNG</button>
+          <button onClick={() => useExport.getState().show('diagram')} disabled={!diagram}>Export…</button>
         </div>
       </div>
       <div
@@ -222,7 +228,7 @@ export function DiagramView() {
       >
         {!diagram && <div className="empty">No term to draw.</div>}
         {diagram && !useCanvas && (
-          <svg className="diagram-svg" width="100%" height="100%">
+          <svg className="diagram-svg" width="100%" height="100%" style={animating ? { visibility: 'hidden' } : undefined}>
             <g transform={`translate(${view.tx} ${view.ty}) scale(${view.scale})`} shapeRendering="crispEdges">
               <g dangerouslySetInnerHTML={{ __html: baseHtml }} />
               <g className="overlay" pointerEvents="none">
@@ -232,6 +238,7 @@ export function DiagramView() {
           </svg>
         )}
         {diagram && useCanvas && <canvas ref={canvasRef} className="diagram-canvas" />}
+        <canvas ref={animRef} className="diagram-canvas" style={{ pointerEvents: 'none', visibility: animating ? 'visible' : 'hidden' }} />
         {diagram && (
           <div className="diagram-info">
             {diagram.width}×{diagram.height - diagram.top} px · {diagram.segments.length} lines

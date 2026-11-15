@@ -182,3 +182,29 @@ rect.hl-hover { fill: var(--hl-hover); }
   .app[data-tab="diagram"] .editor-panel { display: none; }
   .diagram-panel { min-height: 420px; }
 }
+
+/* --- export dialog --- */
+.export-dialog { border: 1px solid var(--border); border-radius: 10px; background: var(--panel); color: var(--text); padding: 0; width: min(860px, calc(100vw - 32px)); max-height: calc(100vh - 48px); }
+.export-dialog::backdrop { background: rgb(0 0 0 / 0.45); }
+.export-body { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px 16px; max-height: calc(100vh - 50px); box-sizing: border-box; }
+.export-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.export-head h2 { margin: 0; font-size: 1.05rem; }
+.export-tabs { display: flex; gap: 4px; flex-wrap: wrap; flex: 1; }
+.export-tabs button { border-radius: 999px; }
+.export-tabs button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.export-head .close { margin-left: auto; }
+.export-pane { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.export-options { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.export-options label { display: inline-flex; gap: 6px; align-items: center; }
+.export-options input[type="number"] { width: 5.5em; }
+.export-preview { min-height: 220px; height: 46vh; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: var(--bg); position: relative; }
+.export-preview textarea { width: 100%; height: 100%; border: 0; resize: none; padding: 8px; box-sizing: border-box; font-family: var(--mono, ui-monospace, monospace); font-size: 12px; background: transparent; color: var(--text); white-space: pre; }
+.export-preview .img-preview { width: 100%; height: 100%; padding: 8px; box-sizing: border-box; }
+.export-preview .anim-preview { max-width: 100%; max-height: 100%; image-rendering: pixelated; }
+.export-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
+.export-dialog .err { color: var(--danger); }
+.export-dialog .ok { color: var(--ok); }
+.progress { position: absolute; left: 16px; right: 16px; top: 50%; height: 22px; border-radius: 11px; background: var(--border); overflow: hidden; }
+.progress > div { height: 100%; background: var(--accent); transition: width 0.1s; }
+.progress > span { position: absolute; inset: 0; text-align: center; font-size: 12px; line-height: 22px; color: var(--text); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }

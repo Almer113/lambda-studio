@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStore, currentTerm, shareLink } from './store';
+import { useExport } from './ExportDialog';
 import { printNamed, type Printed } from '../core/formats/named';
 import { makeFolder } from '../core/fold';
 import { findRedex, STRATEGIES, type Strategy } from '../core/reduce';
@@ -194,7 +195,8 @@ export function Header() {
         </label>
         <label className="check" title="Also contract η-redexes λx.M x → M"><input type="checkbox" checked={s.settings.eta} onChange={(e) => s.setSetting('eta', e.target.checked)} /> η</label>
         <label className="check" title="Read λxy.xy as λx.λy.x y"><input type="checkbox" checked={s.settings.singleLetter} onChange={(e) => s.setSetting('singleLetter', e.target.checked)} /> Single-letter vars</label>
-        <button onClick={() => { navigator.clipboard?.writeText(shareLink(s.source)).then(() => { setShared(true); setTimeout(() => setShared(false), 1500); }).catch(() => {}); }}>{shared ? 'Link copied' : 'Share link'}</button>
+        <button onClick={() => { shareLink(s.source, s.format).then((url) => { history.replaceState(null, '', url); return navigator.clipboard?.writeText(url); }).then(() => { setShared(true); setTimeout(() => setShared(false), 1500); }).catch(() => {}); }} title="Copy a link that opens this source (compressed into the URL)">{shared ? 'Link copied' : 'Share link'}</button>
+        <button onClick={() => useExport.getState().show()}>Export…</button>
         <select aria-label="Theme" value={s.settings.theme} onChange={(e) => s.setSetting('theme', e.target.value as 'system' | 'light' | 'dark')}>
           <option value="system">System theme</option><option value="light">Light</option><option value="dark">Dark</option>
         </select>

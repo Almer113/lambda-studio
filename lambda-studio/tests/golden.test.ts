@@ -1,16 +1,19 @@
 // Pixel-exact comparison against John Tromp's reference implementation.
-// Fixtures come from `blc pbm` in github.com/tromp/AIT; regenerate with
+// Fixtures come from `blc pbm` (standard style) and `blc Pbm` (alternative style) in
+// github.com/tromp/AIT; regenerate with
 //   node scripts/make-golden.mjs ../tools/AIT/blc.exe > tests/golden/tromp.json
 import { describe, it, expect } from 'vitest';
 import golden from './golden/tromp.json';
 import { decodeBLC } from '../src/core/formats/blc';
-import { layout, rasterize } from '../src/core/diagram/layout';
+import { layout, layoutAlternative, rasterize, type Diagram } from '../src/core/diagram/layout';
+import type { Term } from '../src/core/term';
 
-interface Golden { name: string; lam: string; blc: string; width: number; height: number; rows: string[] }
+interface Pixels { w: number; h: number; rows: string[] }
+interface Golden { name: string; lam: string; blc: string; width: number; height: number; rows: string[]; alt: Pixels }
 
-function ourRows(bits: string): { w: number; h: number; rows: string[] } {
+function ourRows(bits: string, lay: (t: Term) => Diagram): Pixels {
   const t = decodeBLC(bits).term!;
-  const r = rasterize(layout(t));
+  const r = rasterize(lay(t));
   const rows: string[] = [];
   for (let y = 0; y < r.h; y++) {
     let s = '';
@@ -23,9 +26,19 @@ function ourRows(bits: string): { w: number; h: number; rows: string[] } {
 describe('Tromp diagrams match the reference AIT implementation', () => {
   for (const g of golden as Golden[]) {
     it(`${g.name}: ${g.lam}`, () => {
-      const ours = ourRows(g.blc);
+      const ours = ourRows(g.blc, layout);
       expect([ours.w, ours.h]).toEqual([g.width, g.height]);
       expect(ours.rows.join('\n')).toBe(g.rows.join('\n'));
+    });
+  }
+});
+
+describe('alternative-style diagrams match the reference AIT implementation', () => {
+  for (const g of golden as Golden[]) {
+    it(`${g.name}: ${g.lam}`, () => {
+      const ours = ourRows(g.blc, layoutAlternative);
+      expect([ours.w, ours.h]).toEqual([g.alt.w, g.alt.h]);
+      expect(ours.rows.join('\n')).toBe(g.alt.rows.join('\n'));
     });
   }
 });

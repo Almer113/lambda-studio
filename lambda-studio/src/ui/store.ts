@@ -5,7 +5,9 @@ import { findRedex, stepAt, redexKindAt, type Strategy, type RedexKind } from '.
 import type { WorkerRequest, WorkerResponse } from '../worker/eval.worker';
 import type { Algorithm } from '../core/combinators';
 
-export type ColorMode = 'mono' | 'binder' | 'depth';
+import type { ColorMode } from '../core/diagram/colors';
+import type { DiagramStyle } from '../core/diagram/layout';
+export type { ColorMode };
 export type Theme = 'system' | 'light' | 'dark';
 
 export interface Settings {
@@ -16,6 +18,9 @@ export interface Settings {
   numerals: boolean;
   zeroAs: '0' | 'FALSE';
   colorMode: ColorMode;
+  diagramStyle: DiagramStyle;
+  /** Animate single β-steps in the diagram. */
+  animate: boolean;
   showRedex: boolean;
   autoLambda: boolean;
   theme: Theme;
@@ -34,7 +39,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   strategy: 'normal', eta: false, singleLetter: false, foldNames: true, numerals: true, zeroAs: '0',
-  colorMode: 'binder', showRedex: true, autoLambda: true, theme: 'system',
+  colorMode: 'binder', diagramStyle: 'standard', animate: true, showRedex: true, autoLambda: true, theme: 'system',
   maxSteps: 10000, maxSize: 200000, playSpeed: 4,
   tex: { current: true, named: true, expanded: true, debruijn0: true, debruijn1: true },
   sourcePreview: true,
@@ -92,9 +97,28 @@ function load(): { source?: string; format?: FormatId | 'auto'; settings?: Parti
 function save(s: Pick<State, 'source' | 'format' | 'settings'>) {
   try { localStorage.setItem(KEY, JSON.stringify({ source: s.source, format: s.format, settings: s.settings })); } catch { /* ignore */ }
 }
-export function shareLink(source: string): string {
-  const enc = btoa(unescape(encodeURIComponent(source)));
-  return `${location.origin}${location.pathname}#s=${enc}`;
+
+// Share links: #z=<base64url of deflate-raw(JSON)>; the old #s=<base64 source> still opens.
+const b64url = (b: Uint8Array) => { let s = ''; for (const x of b) s += String.fromCharCode(x); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+const unb64url = (s: string) => { const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(bin, (c) => c.charCodeAt(0)); };
+async function pipe(data: Uint8Array, stream: CompressionStream | DecompressionStream): Promise<Uint8Array> {
+  const out = new Response(new Blob([data]).stream().pipeThrough(stream));
+  return new Uint8Array(await out.arrayBuffer());
+}
+export interface SharePayload { source: string; format?: FormatId | 'auto' }
+export async function shareLink(source: string, format: FormatId | 'auto' = 'auto'): Promise<string> {
+  const base = `${location.origin}${location.pathname}`;
+  const json = new TextEncoder().encode(JSON.stringify(format === 'auto' ? { source } : { source, format }));
+  if (typeof CompressionStream === 'undefined') return `${base}#s=${btoa(unescape(encodeURIComponent(source)))}`;
+  return `${base}#z=${b64url(await pipe(json, new CompressionStream('deflate-raw')))}`;
+}
+export async function readShareHash(hash: string): Promise<SharePayload | null> {
+  if (!hash.startsWith('#z=')) return null;
+  try {
+    const bytes = await pipe(unb64url(hash.slice(3)), new DecompressionStream('deflate-raw'));
+    const p = JSON.parse(new TextDecoder().decode(bytes));
+    return typeof p.source === 'string' ? p : null;
+  } catch { return null; }
 }
 
 // --- worker ------------------------------------------------------------------
@@ -231,3 +255,13 @@ export const useStore = create<State>((set, get) => {
 });
 
 export const currentTerm = (s: State): Term | null => s.history[s.index]?.term ?? null;
+
+// A compressed share link is decoded asynchronously after start-up.
+if (typeof location !== 'undefined' && location.hash.startsWith('#z=')) {
+  readShareHash(location.hash).then((p) => {
+    if (!p) { useStore.setState({ message: { text: 'Could not read the share link.', tone: 'error' } }); return; }
+    const st = useStore.getState();
+    if (p.format) st.setFormat(p.format);
+    st.setSource(p.source);
+  });
+}

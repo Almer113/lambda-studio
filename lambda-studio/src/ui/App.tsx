@@ -6,6 +6,7 @@ import { Conversions, DataPanel } from './convert';
 import { useApplyTheme } from './theme';
 import { SourcePreview } from './SourcePreview';
 import { useStore } from './store';
+import { ExportDialog } from './ExportDialog';
 
 type Tab = 'edit' | 'diagram' | 'convert' | 'library';
 
@@ -45,6 +46,7 @@ export function App() {
           <Conversions />
         </aside>
       </main>
+      <ExportDialog />
     </div>
   );
 }

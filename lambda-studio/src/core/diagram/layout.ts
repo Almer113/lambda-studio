@@ -85,6 +85,66 @@ export function layout(t: Term): Diagram {
   return { width: 4 * box.w - 1, height: box.h, top: hasFree ? -1 : 0, segments, vars: box.w };
 }
 
+export type DiagramStyle = 'standard' | 'alternative';
+
+/** Lay out a term in either style. */
+export function layoutStyled(t: Term, style: DiagramStyle): Diagram {
+  return style === 'alternative' ? layoutAlternative(t) : layout(t);
+}
+
+/**
+ * Tromp's alternative style: a variable stops just above the row where it is used, and an
+ * application links the *rightmost* anchor line of the function with the leftmost anchor line of
+ * the argument, one row below the deeper of the two; no output line continues below a link.
+ * The result is more compact (I is a single bar; ω looks like an upside-down Ω).
+ */
+export function layoutAlternative(t: Term): Diagram {
+  const segments: Segment[] = [];
+  let hasFree = false;
+  const binders: { row: number; path: Path }[] = [];
+  /** w: variable columns; bottom: last pixel row used; left/right: anchor lines */
+  interface ABox { w: number; bottom: number; left: Segment; right: Segment }
+
+  const go = (n: Term, col: number, row: number, path: Path): ABox => {
+    switch (n.tag) {
+      case 'var':
+      case 'free': {
+        let top = -1;
+        let binder: Path | null = null;
+        if (n.tag === 'var' && n.i < binders.length) {
+          const b = binders[binders.length - 1 - n.i];
+          top = b.row; binder = b.path;
+        } else hasFree = true;
+        const bottom = Math.max(top, row - 2);
+        const seg: Segment = { kind: 'var', x1: 4 * col + 1, x2: 4 * col + 1, y1: top, y2: bottom, path, binder, index: n.tag === 'var' ? n.i : undefined };
+        segments.push(seg);
+        return { w: 1, bottom, left: seg, right: seg };
+      }
+      case 'lam': {
+        const bar: Segment = { kind: 'lam', x1: 4 * col, x2: 0, y1: row, y2: row, path };
+        segments.push(bar);
+        binders.push({ row, path });
+        const body = go(n.body, col, row + 2, path + 'b');
+        binders.pop();
+        bar.x2 = 4 * (col + body.w) - 2;
+        return { ...body, bottom: Math.max(body.bottom, row) };
+      }
+      case 'app': {
+        const f = go(n.fn, col, row, path + 'f');
+        const a = go(n.arg, col + f.w, row, path + 'a');
+        const link = Math.max(f.bottom, a.bottom) + 2;
+        f.right.y2 = link;
+        a.left.y2 = link;
+        segments.push({ kind: 'app', x1: f.right.x1, x2: a.left.x1, y1: link, y2: link, path });
+        return { w: f.w + a.w, bottom: link, left: f.right, right: a.left };
+      }
+    }
+  };
+
+  const box = go(t, 0, 0, '');
+  return { width: 4 * box.w - 1, height: box.bottom + 1, top: hasFree ? -1 : 0, segments, vars: box.w };
+}
+
 /** Number of 4-way crossings (a variable line passing through a λ bar it is not bound by). */
 export function crossings(d: Diagram): number {
   const bars = d.segments.filter((s) => s.kind === 'lam');

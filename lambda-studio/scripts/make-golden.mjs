@@ -52,10 +52,15 @@ for (const [name, lam] of Object.entries(fixed)) {
   const file = join(dir, `${name}.lam`);
   writeFileSync(file, lam + '\n');
   const bits = run('blc', file).trim();
-  const pbm = run('pbm', file).split('\n');
-  const [w, h] = pbm[1].trim().split(/\s+/).map(Number);
-  const rows = pbm.slice(2, 2 + h).map((r) => r.trim().split(/\s+/).join(''));
-  if (rows.length !== h || rows.some((r) => r.length !== w)) throw new Error(`bad pbm for ${name}`);
-  out.push({ name, lam, blc: bits, width: w, height: h, rows });
+  const readPbm = (action) => {
+    const pbm = run(action, file).split('\n');
+    const [w, h] = pbm[1].trim().split(/\s+/).map(Number);
+    const rows = pbm.slice(2, 2 + h).map((r) => r.trim().split(/\s+/).join(''));
+    if (rows.length !== h || rows.some((r) => r.length !== w)) throw new Error(`bad ${action} for ${name}`);
+    return { w, h, rows };
+  };
+  const std = readPbm('pbm');
+  const alt = readPbm('Pbm'); // Tromp's alternative style
+  out.push({ name, lam, blc: bits, width: std.w, height: std.h, rows: std.rows, alt });
 }
 process.stdout.write(JSON.stringify(out, null, 1) + '\n');
