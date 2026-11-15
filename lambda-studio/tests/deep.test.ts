@@ -10,6 +10,10 @@ import { type Term, type Path, app, lam, v, size, hash, equal, maxFree, replaceA
 import { shift, beta, occurs, isEtaRedex } from '../src/core/debruijn';
 import { printNamed } from '../src/core/formats/named';
 import { printCode } from '../src/core/formats/code';
+import { printDeBruijn } from '../src/core/formats/debruijn';
+import { printJSON, parseJSON } from '../src/core/formats/json';
+import { toCL, printCL, fromCL, clSize, ALGORITHMS } from '../src/core/combinators';
+import { normalize } from '../src/core/nbe';
 import { randomClosedTerm, Counter } from '../src/core/generate';
 
 const DEEP = 60_000;
@@ -60,6 +64,28 @@ describe('deep terms', () => {
     }
     expect(printCode(churchNumeral(2), 'wolfram')).toBe('Function[f, Function[x, f[f[x]]]]');
     expect(printCode(churchNumeral(2), 'haskell')).toBe('\\f x -> f (f x)');
+  });
+
+  it('de Bruijn, JSON and combinator notations at depth 20000', () => {
+    const N = 20_000, t = churchNumeral(N);
+    for (const base of [0, 1] as const) {
+      const p = printDeBruijn(t, base);
+      expect(p.text.startsWith(`λλ${1 + base} (${1 + base} (`)).toBe(true);
+      expect(equal(parseProgram(printDeBruijn(churchNumeral(5), base).text, base === 0 ? 'debruijn0' : 'debruijn1').term!, churchNumeral(5))).toBe(true);
+    }
+    // deep JSON switches to the compact form (indentation would grow with depth²) and still parses
+    const json = printJSON(t);
+    expect(json.startsWith('{"type":"lam","name":"f","body":')).toBe(true);
+    expect(equal(parseJSON(json), t)).toBe(true);
+    expect(printJSON(churchNumeral(1))).toBe(JSON.stringify({ type: 'lam', name: 'f', body: { type: 'lam', name: 'x', body: { type: 'app', fn: { type: 'var', index: 1 }, arg: { type: 'var', index: 0 } } } }, null, 1));
+    for (const a of ALGORITHMS) {
+      const cl = toCL(t, a.id, 400_000);
+      for (const style of ['ski', 'unlambda', 'iota', 'jot', 'bcl', 'lazyk'] as const) expect(printCL(cl, style).length).toBeGreaterThan(N);
+    }
+    expect(clSize(toCL(t, 'turner'))).toBe(2 * N - 1);
+    // the translation still means the numeral (checked on a smaller one: the NbE normalizer
+    // itself is still recursive)
+    expect(decodeNumeral(normalize(fromCL(toCL(churchNumeral(1000), 'turner'))).term!)).toBe(1000);
   });
 });
 

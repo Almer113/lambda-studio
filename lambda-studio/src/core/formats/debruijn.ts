@@ -1,6 +1,6 @@
 // De Bruijn index notation, 0- or 1-based:  λλ1 (1 0)   or Tromp style  λλ2 (2 1)
 
-import { type Term, type Path, app, lam, v, free } from '../term';
+import { type Term, type Path, app, lam, v, free, maxFree } from '../term';
 import { ParseError, type Printed, type Span } from './named';
 
 interface SpanTree { from: number; to: number; kids: SpanTree[] }
@@ -78,30 +78,35 @@ export function parseDeBruijn(src: string, base: 0 | 1, spans?: Map<Path, Span>)
 export function printDeBruijn(t: Term, base: 0 | 1, lambda = 'λ'): Printed {
   let out = '';
   const spans: Printed['spans'] = [];
-  const emit = (n: Term, path: Path, pos: 'top' | 'fn' | 'arg') => {
+  // explicit task stack (tasks pushed in reverse order): terms can be very deep
+  const tasks: (() => void)[] = [];
+  const text = (s: string) => tasks.push(() => { out += s; });
+  const emit = (n: Term, path: Path, pos: 'top' | 'fn' | 'arg') => tasks.push(() => visit(n, path, pos));
+  const visit = (n: Term, path: Path, pos: 'top' | 'fn' | 'arg') => {
     const start = out.length;
+    const finish = () => tasks.push(() => spans.push({ path, from: start, to: out.length }));
     switch (n.tag) {
-      case 'var': out += String(n.i + base); break;
-      case 'free': out += n.name; break;
+      case 'var': out += String(n.i + base); spans.push({ path, from: start, to: out.length }); break;
+      case 'free': out += n.name; spans.push({ path, from: start, to: out.length }); break;
       case 'lam': {
         const paren = pos !== 'top';
-        if (paren) out += '(';
-        out += lambda;
+        out += (paren ? '(' : '') + lambda;
+        finish();
+        if (paren) text(')');
         emit(n.body, path + 'b', 'top');
-        if (paren) out += ')';
         break;
       }
       case 'app': {
+        finish();
+        if (n.arg.tag === 'app') { text(')'); emit(n.arg, path + 'a', 'top'); text(' ('); }
+        else { emit(n.arg, path + 'a', 'arg'); text(' '); }
         emit(n.fn, path + 'f', 'fn');
-        out += ' ';
-        if (n.arg.tag === 'app') { out += '('; emit(n.arg, path + 'a', 'top'); out += ')'; }
-        else emit(n.arg, path + 'a', 'arg');
         break;
       }
     }
-    spans.push({ path, from: start, to: out.length });
   };
   emit(t, '', 'top');
+  while (tasks.length) tasks.pop()!();
   return { text: out, spans };
 }
 
@@ -109,7 +114,5 @@ export function printDeBruijn(t: Term, base: 0 | 1, lambda = 'λ'): Printed {
 export function deBruijnClosedUnder(src: string, base: 0 | 1): boolean | null {
   let t: Term;
   try { t = parseDeBruijn(src, base); } catch { return null; }
-  const check = (n: Term, d: number): boolean =>
-    n.tag === 'var' ? n.i < d : n.tag === 'lam' ? check(n.body, d + 1) : n.tag === 'app' ? check(n.fn, d) && check(n.arg, d) : true;
-  return check(t, 0);
+  return maxFree(t) === 0;
 }
