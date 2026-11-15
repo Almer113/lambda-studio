@@ -4,7 +4,8 @@
 import { useMemo } from 'react';
 import { useStore } from './store';
 import { lex, parseStatements, type Token } from '../core/formats/named';
-import { tokensToTex, printLatex } from '../core/formats/latex';
+import { tokensToTex, printLatex, texName } from '../core/formats/latex';
+import { makeFolder } from '../core/fold';
 import { preludeInfo } from '../core/program';
 import type { Path } from '../core/term';
 import { TexView } from './Tex';
@@ -31,17 +32,27 @@ export function SourcePreview() {
       // already LaTeX: show it as typed (without math delimiters), split at \\ line breaks
       return source.replace(/^\s*\$+|\$+\s*$/g, '').split(/\\\\/).filter((l) => l.trim()).map((l, i) => ({ key: String(i), tex: l, def: false }));
     }
-    if (fmt === 'blc' || fmt === 'json') {
-      return program.term ? [{ key: 't', tex: printLatex(program.term, { tags: true }), def: false }] : [];
+    if (fmt !== 'named' && fmt !== 'haskell' && fmt !== 'debruijn0' && fmt !== 'debruijn1') {
+      // code, combinators, bits, JSON: typeset what was parsed, with names folded back in
+      if (!program.term && !program.defs.length) return program.diagnostics.length ? 'Fix the syntax error to see the preview.' : [];
+      const folder = makeFolder(program.foldTable, { numerals: true, zeroAs: '0' });
+      const avoid = program.foldTable.names;
+      const out: Line[] = program.defs.filter((d) => d.term && d.name !== program.mainName).map((d) => ({
+        key: 'def:' + d.name, def: true,
+        tex: `${texName(d.name, true)} \\equiv ${printLatex(d.term!, { fold: (t) => (t === d.term ? null : folder(t)), avoid })}`,
+      }));
+      if (program.term) out.push({ key: 't', def: false, tex: printLatex(program.term, { tags: true, fold: folder, avoid }) });
+      return out;
     }
-    let toks: Token[];
-    try { toks = lex(source); } catch { return 'Fix the syntax error to see the preview.'; }
+    const text = source;
     const spans: { path: Path; from: number; to: number }[] = [...program.spans].map(([path, s]) => ({ path, ...s }));
+    let toks: Token[];
+    try { toks = lex(text); } catch { return 'Fix the syntax error to see the preview.'; }
     if (fmt === 'debruijn0' || fmt === 'debruijn1') {
       return [{ key: 't', tex: tokensToTex(toks, spans, { tags: true, defNames: new Set(), numerals: 'index' }), def: false }];
     }
     const defNames = new Set<string>([...preludeInfo().map((d) => d.name), ...program.defs.map((d) => d.name)]);
-    const { statements } = parseStatements(source, { singleLetter, knownNames: defNames });
+    const { statements } = parseStatements(text, { singleLetter, knownNames: defNames });
     return statements.map((st) => {
       const ts = toks.filter((t) => t.from >= st.from && t.to <= st.to);
       const ss = spans.filter((s) => s.from >= st.from && s.to <= st.to);

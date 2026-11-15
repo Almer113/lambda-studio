@@ -127,6 +127,19 @@ kbd { border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 
 .sw.hl-link, rect.hl-link { background: var(--hl-link); fill: var(--hl-link); }
 rect.hl-hover { fill: var(--hl-hover); }
 
+.conv-group { border-top: 1px solid var(--border); padding-top: 4px; margin-top: 4px; }
+.conv-group:first-of-type { border-top: none; margin-top: 0; }
+.group-title { display: block; width: 100%; text-align: left; border: none; background: none; padding: 4px 0; font-weight: 600; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.alg-row { display: flex; flex-direction: column; gap: 4px; padding: 2px 0 6px; }
+.alg-row label { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 12px; }
+.alg-row .hint { margin: 0; font-size: 12px; }
+.alg-sizes { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.alg-sizes .on { color: var(--text); font-weight: 600; }
+.out-error { color: var(--muted); font-size: 12px; font-style: italic; margin-top: 2px; }
+.data-panel { flex-shrink: 0; }
+.data-form { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+.data-form input { border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; background: var(--panel); }
+.data-panel .buttons { margin-top: 6px; }
 .out-row { border-top: 1px solid var(--border); padding: 6px 0; }
 .out-row:first-of-type { border-top: none; }
 .out-head { display: flex; align-items: center; gap: 8px; }

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Editor } from './Editor';
 import { DiagramView } from './DiagramView';
-import { Header, Library, CurrentTerm, Controls, Conversions, Inspector } from './panels';
+import { Header, Library, CurrentTerm, Controls, Inspector } from './panels';
+import { Conversions, DataPanel } from './convert';
 import { useApplyTheme } from './theme';
 import { SourcePreview } from './SourcePreview';
 import { useStore } from './store';
@@ -22,7 +23,7 @@ export function App() {
         ))}
       </nav>
       <main className="layout">
-        <aside className="col-left"><Library /></aside>
+        <aside className="col-left"><Library /><DataPanel /></aside>
         <section className="col-center">
           <div className="panel editor-panel">
             <div className="panel-head">

@@ -3,6 +3,7 @@ import { type Term, type Path } from '../core/term';
 import { parseProgram, type FormatId, type Program } from '../core/program';
 import { findRedex, stepAt, redexKindAt, type Strategy, type RedexKind } from '../core/reduce';
 import type { WorkerRequest, WorkerResponse } from '../worker/eval.worker';
+import type { Algorithm } from '../core/combinators';
 
 export type ColorMode = 'mono' | 'binder' | 'depth';
 export type Theme = 'system' | 'light' | 'dark';
@@ -25,6 +26,10 @@ export interface Settings {
   tex: Record<string, boolean>;
   /** Show a typeset preview of the source under the editor. */
   sourcePreview: boolean;
+  /** Bracket-abstraction algorithm for the combinator notations. */
+  clAlgorithm: Algorithm;
+  /** Which notation groups are expanded. */
+  openGroups: Record<string, boolean>;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -33,6 +38,8 @@ export const DEFAULT_SETTINGS: Settings = {
   maxSteps: 10000, maxSize: 200000, playSpeed: 4,
   tex: { current: true, named: true, expanded: true, debruijn0: true, debruijn1: true },
   sourcePreview: true,
+  clAlgorithm: 'turner',
+  openGroups: { lambda: true, combinators: true, code: true, bits: true },
 };
 
 export interface Entry {

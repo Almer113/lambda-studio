@@ -71,4 +71,12 @@ export const EXAMPLES: { name: string; src: string; note: string }[] = [
   { name: 'K I Ω', src: 'K I Ω', note: 'Normal order succeeds; applicative order loops.' },
   { name: 'Y combinator', src: 'λf.(λx.f (x x)) (λx.f (x x))', note: "Tromp's title diagram is a deformed Y." },
   { name: 'Definitions', src: 'TWICE = λf x.f (f x)\nSQUARE = λn.MULT n n\n\nTWICE SQUARE 2', note: 'Define your own names, one per line.' },
+  // other input notations (auto-detected)
+  { name: 'SKI: S K K', src: 'SKK', note: 'Combinators expand to λ-terms; S K K reduces to I.' },
+  { name: 'Unlambda', src: '``s`k`sik', note: 'Backtick applies; this is λx y.y x (the T combinator).' },
+  { name: 'Iota', src: '*i*i*ii', note: 'ι = λf.f S K; this is K.' },
+  { name: 'JavaScript', src: '// curried arrow functions\nconst TWICE = f => x => f(f(x));\nTWICE(TWICE)(SUCC)(0)', note: 'JavaScript is read as λ-calculus.' },
+  { name: 'Python', src: 'COMPOSE = lambda f, g: lambda x: f(g(x))\nCOMPOSE(SUCC, SUCC)(3)', note: 'Multi-argument lambdas are curried.' },
+  { name: 'Scheme', src: '(define (TWICE f x) (f (f x)))\n(TWICE SUCC 5)', note: '' },
+  { name: 'LaTeX', src: '\\mathsf{TWICE} \\equiv \\lambda f\\,x.\\, f\\,(f\\,x) \\\\\n\\mathsf{TWICE}\\; \\mathsf{SUCC}\\; \\ulcorner 3 \\urcorner', note: 'Paste λ-terms from papers.' },
 ];

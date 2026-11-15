@@ -6,19 +6,40 @@ import { parseStatements, Resolver, ParseError, type DefSource, type Diagnostic,
 import { parseDeBruijn, printDeBruijn, deBruijnClosedUnder } from './formats/debruijn';
 import { decodeBLC, encodeBLC } from './formats/blc';
 import { parseJSON, printJSON } from './formats/json';
-import { looksLikeLatex, normalizeLatex, mapSpan, printLatex } from './formats/latex';
+import { looksLikeLatex, normalizeLatex, mapSpan, printLatex, type Normalized } from './formats/latex';
+import { parseSKI, parseUnlambda, parseIota, parseJot, parseBCL, parseLazyK, fromCL, toCL, printCL, ParseFail, type CL, type Algorithm } from './combinators';
+import { codeToNamed, printCode, CodeParseError, type CodeLang } from './formats/code';
+import { bytesToBits, bitsToBytes, bytesToHex, parseBytes, bytesToBase64 } from './formats/blc8';
 import { PRELUDE } from './prelude';
 import { FoldTable } from './fold';
 
-export type FormatId = 'named' | 'debruijn0' | 'debruijn1' | 'blc' | 'json' | 'latex';
+export type FormatId =
+  | 'named' | 'debruijn0' | 'debruijn1' | 'latex'
+  | 'blc' | 'blc8' | 'json'
+  | 'ski' | 'unlambda' | 'iota' | 'jot' | 'bcl' | 'lazyk'
+  | 'haskell' | 'js' | 'python' | 'lisp' | 'wolfram';
 
-export const FORMATS: { id: FormatId; name: string; example: string }[] = [
-  { id: 'named', name: 'Named λ', example: 'λf x.f (f x)' },
-  { id: 'debruijn0', name: 'De Bruijn (0-based)', example: 'λλ1 (1 0)' },
-  { id: 'debruijn1', name: 'De Bruijn (1-based, Tromp)', example: 'λλ2 (2 1)' },
-  { id: 'blc', name: 'Binary λ-calculus (BLC)', example: '0000011100111010' },
-  { id: 'json', name: 'JSON AST', example: '{"type":"lam","body":…}' },
-  { id: 'latex', name: 'LaTeX', example: '\lambda f.\,\lambda x.\, f\,(f\,x)' },
+export type FormatGroup = 'λ' | 'Bits & data' | 'Combinators' | 'Code';
+
+export const FORMATS: { id: FormatId; name: string; example: string; group: FormatGroup }[] = [
+  { id: 'named', name: 'Named λ', example: 'λf x.f (f x)', group: 'λ' },
+  { id: 'debruijn0', name: 'De Bruijn (0-based)', example: 'λλ1 (1 0)', group: 'λ' },
+  { id: 'debruijn1', name: 'De Bruijn (1-based, Tromp)', example: 'λλ2 (2 1)', group: 'λ' },
+  { id: 'latex', name: 'LaTeX', example: '\\lambda f.\\,\\lambda x.\\, f\\,(f\\,x)', group: 'λ' },
+  { id: 'blc', name: 'Binary λ-calculus (BLC)', example: '0000011100111010', group: 'Bits & data' },
+  { id: 'blc8', name: 'BLC8 bytes (hex / base64)', example: '0x05 0x73 0xa0', group: 'Bits & data' },
+  { id: 'json', name: 'JSON AST', example: '{"type":"lam","body":…}', group: 'Bits & data' },
+  { id: 'ski', name: 'SKI / combinators', example: 'S(S(KS)K)I', group: 'Combinators' },
+  { id: 'unlambda', name: 'Unlambda', example: '``s``s`ksk`ki', group: 'Combinators' },
+  { id: 'iota', name: 'Iota', example: '*i*i*ii', group: 'Combinators' },
+  { id: 'jot', name: 'Jot', example: '11100', group: 'Combinators' },
+  { id: 'bcl', name: 'Binary combinatory logic', example: '0100', group: 'Combinators' },
+  { id: 'lazyk', name: 'Lazy K', example: '(SKK)', group: 'Combinators' },
+  { id: 'haskell', name: 'Haskell', example: '\\f x -> f (f x)', group: 'Code' },
+  { id: 'js', name: 'JavaScript', example: 'f => x => f(f(x))', group: 'Code' },
+  { id: 'python', name: 'Python', example: 'lambda f: lambda x: f(f(x))', group: 'Code' },
+  { id: 'lisp', name: 'Lisp / Scheme', example: '(lambda (f x) (f (f x)))', group: 'Code' },
+  { id: 'wolfram', name: 'Wolfram Language', example: 'Function[f, Function[x, f[f[x]]]]', group: 'Code' },
 ];
 
 export interface DefInfo { name: string; origin: 'prelude' | 'user'; term: Term | null; error?: string; recursive?: boolean; span?: Span; doc?: string; group?: string }
@@ -79,7 +100,15 @@ export function preludeTerm(name: string): Term {
 export function detectFormat(src: string, defaultBase: 0 | 1 = 1): FormatId {
   const s = src.replace(/(--|\/\/|#).*$/gm, '').trim();
   if (s.startsWith('{')) return 'json';
+  if (/^0x[0-9a-f]/i.test(s)) return 'blc8';
   if (looksLikeLatex(src)) return 'latex';
+  if (/^[\[(]\s*(lambda|define)\b/.test(s) || /\(\s*lambda\s*[([]/.test(s)) return 'lisp';
+  if (/\bFunction\s*\[/.test(s) || /\|->/.test(s)) return 'wolfram';
+  if (/\blambda\s+[A-Za-z_][\w\s,]*:/.test(s)) return 'python';
+  if (/=>/.test(s)) return 'js';
+  if (/^`/.test(s) && /^[`skiSKI\s]+$/.test(s.replace(/#.*$/gm, ''))) return 'unlambda';
+  if (/^\*/.test(s) && /^[*i\s]+$/.test(s)) return 'iota';
+  if (/^[SKIBCWι()\s'*]+$/.test(s) && /[SKIBCWι]/.test(s) && !/[λ\\]/.test(s)) return 'ski';
   if (/^[01\s]+$/.test(s) && s.replace(/\s/g, '').length >= 4) return 'blc';
   if (/[λ\\]/.test(s) && /^[λ\\().\s0-9]+$/.test(s) && /[0-9]/.test(s)) {
     if (/(^|[^0-9])0([^0-9]|$)/.test(s)) return 'debruijn0';
@@ -98,7 +127,7 @@ export function parseProgram(src: string, format: FormatId | 'auto' = 'auto', op
   const spans = new Map<Path, Span>();
   const base: Program = { term: null, format: fmt, detected, diagnostics: [], spans, defs: [], foldTable: preludeFoldTable() };
   const fail = (e: unknown): Program => {
-    if (e instanceof ParseError) return { ...base, diagnostics: [{ from: e.from, to: Math.max(e.to, e.from), message: e.message, severity: 'error' }] };
+    if (e instanceof ParseError || e instanceof ParseFail || e instanceof CodeParseError) return { ...base, diagnostics: [{ from: e.from, to: Math.max(e.to, e.from), message: e.message, severity: 'error' }] };
     return { ...base, diagnostics: [{ from: 0, to: src.length, message: String(e), severity: 'error' }] };
   };
   if (src.trim() === '') return base;
@@ -118,21 +147,43 @@ export function parseProgram(src: string, format: FormatId | 'auto' = 'auto', op
         return parseNamedProgram(src, opts, base);
       case 'latex':
         return parseLatexProgram(src, opts, base);
+      case 'blc8': {
+        const bytes = parseBytes(src);
+        const r = decodeBLC(bytesToBits(bytes));
+        const padding = r.trailing > 0 && r.trailing < 8 && /^0*$/.test(bytesToBits(bytes).slice(r.used));
+        const diagnostics: Diagnostic[] = r.trailing && !padding ? [{ from: 0, to: src.length, message: `${r.trailing} trailing bit(s) after the term were ignored (input data?)`, severity: 'warning' }] : [];
+        return { ...base, term: r.term, diagnostics };
+      }
+      case 'ski': case 'unlambda': case 'iota': case 'jot': case 'bcl': case 'lazyk':
+        return { ...base, term: fromCL(CL_PARSERS[fmt](src)) };
+      case 'haskell':
+        return parseNamedProgram(src, opts, base);
+      case 'js': case 'python': case 'lisp': case 'wolfram':
+        return parseViaNamed(codeToNamed(src, fmt), 'named', opts, base);
     }
   } catch (e) { return fail(e); }
 }
+
+const CL_PARSERS: Record<'ski' | 'unlambda' | 'iota' | 'jot' | 'bcl' | 'lazyk', (src: string) => CL> = {
+  ski: parseSKI, unlambda: parseUnlambda, iota: parseIota, jot: parseJot, bcl: parseBCL, lazyk: parseLazyK,
+};
 
 /** LaTeX: normalise to plain notation, parse that, and map positions back into the LaTeX source. */
 function parseLatexProgram(src: string, opts: ProgramOptions, base: Program): Program {
   const n = normalizeLatex(src);
   let inner = detectFormat(n.text, opts.defaultDeBruijnBase ?? 1);
-  if (inner === 'latex' || inner === 'blc' || inner === 'json') inner = 'named';
+  if (inner !== 'debruijn0' && inner !== 'debruijn1') inner = 'named';
+  return { ...parseViaNamed(n, inner, opts, base), format: 'latex' };
+}
+
+/** Parse translated text and map spans / diagnostics back into the original source. */
+function parseViaNamed(n: Normalized, inner: FormatId, opts: ProgramOptions, base: Program): Program {
   const p = parseProgram(n.text, inner, opts);
   const spans = new Map<Path, Span>();
   for (const [k, s] of p.spans) spans.set(k, mapSpan(n, s));
   return {
     ...p,
-    format: 'latex',
+    format: base.format,
     detected: base.detected,
     spans,
     diagnostics: p.diagnostics.map((d) => ({ ...d, ...mapSpan(n, d) })),
@@ -200,13 +251,22 @@ function parseNamedProgram(src: string, opts: ProgramOptions, base: Program): Pr
 }
 
 // --- printing in any format -----------------------------------------------
-export function printTerm(t: Term, fmt: FormatId): string {
+export interface PrintTermOptions { algorithm?: Algorithm }
+
+export function printTerm(t: Term, fmt: FormatId, opts: PrintTermOptions = {}): string {
   switch (fmt) {
     case 'named': return printNamed(t).text;
     case 'debruijn0': return printDeBruijn(t, 0).text;
     case 'debruijn1': return printDeBruijn(t, 1).text;
-    case 'blc': return encodeBLC(t);
-    case 'json': return printJSON(t);
     case 'latex': return printLatex(t);
+    case 'blc': return encodeBLC(t);
+    case 'blc8': return bytesToHex(bitsToBytes(encodeBLC(t)));
+    case 'json': return printJSON(t);
+    case 'ski': case 'unlambda': case 'iota': case 'jot': case 'bcl': case 'lazyk':
+      return printCL(toCL(t, opts.algorithm ?? (fmt === 'ski' ? 'turner' : 'ski')), fmt);
+    case 'haskell': case 'js': case 'python': case 'lisp': case 'wolfram':
+      return printCode(t, fmt as CodeLang);
   }
 }
+
+export { bytesToBase64 };
