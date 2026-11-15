@@ -70,10 +70,12 @@ export function layout(t: Term): Diagram {
       case 'app': {
         const f = go(n.fn, col, row, path + 'f');
         const a = go(n.arg, col + f.w, row, path + 'a');
-        const link = row + Math.max(f.h, a.h);
+        // As in Tromp's AIT renderer: the link sits on the lower of the two sub-diagrams' last rows,
+        // and the function's line continues two rows below it (the application's own 2 rows).
+        const link = row + Math.max(f.h, a.h) - 1;
         a.out.y2 = link;
         segments.push({ kind: 'app', x1: f.out.x1, x2: a.out.x1, y1: link, y2: link, path });
-        f.out.y2 = link + 1;
+        f.out.y2 = link + 2;
         return { w: f.w + a.w, h: Math.max(f.h, a.h) + 2, out: f.out };
       }
     }
