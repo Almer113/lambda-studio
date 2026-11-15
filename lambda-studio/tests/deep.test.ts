@@ -83,9 +83,19 @@ describe('deep terms', () => {
       for (const style of ['ski', 'unlambda', 'iota', 'jot', 'bcl', 'lazyk'] as const) expect(printCL(cl, style).length).toBeGreaterThan(N);
     }
     expect(clSize(toCL(t, 'turner'))).toBe(2 * N - 1);
-    // the translation still means the numeral (checked on a smaller one: the NbE normalizer
-    // itself is still recursive)
-    expect(decodeNumeral(normalize(fromCL(toCL(churchNumeral(1000), 'turner'))).term!)).toBe(1000);
+    // the translation still means the numeral
+    expect(decodeNumeral(normalize(fromCL(toCL(t, 'turner')), 5_000_000).term!)).toBe(N);
+  });
+
+  it('the fast normalizer handles deep results', () => {
+    // these overflowed the old recursive normalizer, even with Node's stack
+    for (const [src, n] of [['MULT 100 100', 10_000], ['MULT 300 300', 90_000], ['EXP 3 9', 19_683], ['FACT 7', 5040]] as const) {
+      const r = normalize(parseProgram(src, 'named').term!, 5_000_000);
+      expect(r.status, src).toBe('normal');
+      expect(decodeNumeral(r.term!)).toBe(n);
+    }
+    // no normal form: reported as running out of fuel, not as a crash
+    expect(normalize(parseProgram('Y', 'named').term!, 20_000).status).toBe('fuel');
   });
 });
 
