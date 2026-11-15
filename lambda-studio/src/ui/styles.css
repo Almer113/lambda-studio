@@ -315,3 +315,6 @@ button.linklike { background: none; border: 0; padding: 0; color: var(--accent);
   .tabs button { flex: none; }
   .tutorial { left: 8px; right: 8px; bottom: 8px; width: auto; max-height: 42vh; }
 }
+
+/* error boundary fallback */
+.panel-error p { margin: 0; padding: 10px 12px; font-size: 13px; color: var(--muted, inherit); }

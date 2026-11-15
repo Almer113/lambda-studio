@@ -14,37 +14,43 @@ export const STRATEGIES: { id: Strategy; name: string; description: string }[] =
 export interface ReduceOptions { strategy: Strategy; eta: boolean }
 export type RedexKind = 'beta' | 'eta';
 
-const weak = (s: Strategy) => s === 'cbn' || s === 'cbv';
 
-/** Path of the next redex according to the strategy, or null if none. */
+/** Path of the next redex according to the strategy, or null if none (iterative: terms can be very deep). */
 export function findRedex(t: Term, opts: ReduceOptions, path: Path = ''): Path | null {
   const { strategy: s, eta } = opts;
-  switch (t.tag) {
-    case 'var':
-    case 'free':
-      return null;
-    case 'lam': {
-      if (weak(s)) return null;
-      if (s === 'applicative') {
-        const r = findRedex(t.body, opts, path + 'b');
-        if (r !== null) return r;
-        return eta && isEtaRedex(t) ? path : null;
+  const nodes: Term[] = [t], paths: Path[] = [path];
+  if (s === 'applicative' || s === 'cbv') {
+    // innermost first: children left to right, then the node itself (post-order)
+    const post: boolean[] = [false];
+    while (nodes.length) {
+      const n = nodes.pop()!, p = paths.pop()!, done = post.pop()!;
+      if (done) {
+        if (n.tag === 'app' ? n.fn.tag === 'lam' : eta && isEtaRedex(n)) return p;
+        continue;
       }
-      if (eta && isEtaRedex(t)) return path;
-      return findRedex(t.body, opts, path + 'b');
+      if (n.tag === 'lam') {
+        if (s === 'cbv') continue;
+        nodes.push(n, n.body); paths.push(p, p + 'b'); post.push(true, false);
+      } else if (n.tag === 'app') {
+        nodes.push(n, n.arg, n.fn); paths.push(p, p + 'a', p + 'f'); post.push(true, false, false);
+      }
     }
-    case 'app': {
-      if (s === 'applicative' || s === 'cbv') {
-        const r = findRedex(t.fn, opts, path + 'f') ?? findRedex(t.arg, opts, path + 'a');
-        if (r !== null) return r;
-        return t.fn.tag === 'lam' ? path : null;
-      }
-      if (t.fn.tag === 'lam') return path;
-      const r = findRedex(t.fn, opts, path + 'f');
-      if (r !== null || s === 'cbn' || s === 'head') return r;
-      return findRedex(t.arg, opts, path + 'a');
+    return null;
+  }
+  // outermost first (pre-order); cbn never enters λ, cbn and head never enter arguments
+  while (nodes.length) {
+    const n = nodes.pop()!, p = paths.pop()!;
+    if (n.tag === 'lam') {
+      if (s === 'cbn') continue;
+      if (eta && isEtaRedex(n)) return p;
+      nodes.push(n.body); paths.push(p + 'b');
+    } else if (n.tag === 'app') {
+      if (n.fn.tag === 'lam') return p;
+      if (s === 'normal') { nodes.push(n.arg); paths.push(p + 'a'); }
+      nodes.push(n.fn); paths.push(p + 'f');
     }
   }
+  return null;
 }
 
 /** Every redex position in the term (for manual mode and counting), outermost-first, left to right. */

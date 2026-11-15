@@ -60,33 +60,60 @@ export function printCode(t: Term, lang: CodeLang): string {
   };
   const spine = (n: Term): Term[] => { const args: Term[] = []; let c = n; while (c.tag === 'app') { args.unshift(c.arg); c = c.fn; } return [c, ...args]; };
 
-  const go = (n: Term, pos: 'top' | 'fn' | 'arg'): string => {
-    if (n.tag === 'var') return varName(n.i);
-    if (n.tag === 'free') return freeName(n.name);
+  // Output is produced strictly left to right, so printing runs off an explicit task stack
+  // (tasks pushed in reverse order) instead of recursion: terms can be very deep.
+  let out = '';
+  const tasks: (() => void)[] = [];
+  const text = (s: string) => tasks.push(() => { out += s; });
+  const go = (n: Term, pos: 'top' | 'fn' | 'arg') => tasks.push(() => visit(n, pos));
+  /** Push `parts` so they run in the order given. */
+  const seq = (...parts: (() => void)[]) => { for (let k = parts.length - 1; k >= 0; k--) parts[k](); };
+
+  const visit = (n: Term, pos: 'top' | 'fn' | 'arg') => {
+    if (n.tag === 'var') { out += varName(n.i); return; }
+    if (n.tag === 'free') { out += freeName(n.name); return; }
     if (n.tag === 'lam') {
       const { names, body } = params(n);
-      const b = go(body, 'top');
-      ctx.length -= names.length;
+      const paren = pos !== 'top';
+      const pop = () => tasks.push(() => { ctx.length -= names.length; });
       switch (lang) {
-        case 'haskell': { const s = `\\${names.join(' ')} -> ${b}`; return pos === 'top' ? s : `(${s})`; }
-        case 'js': { const s = `${names.join(' => ')} => ${b}`; return pos === 'top' ? s : `(${s})`; }
-        case 'python': { const s = names.map((x) => `lambda ${x}: `).join('') + b; return pos === 'top' ? s : `(${s})`; }
-        case 'lisp': return `(lambda (${names.join(' ')}) ${b})`;
-        case 'wolfram': return names.reduceRight((acc, x) => `Function[${x}, ${acc}]`, b);
+        case 'haskell': seq(() => text(`${paren ? '(' : ''}\\${names.join(' ')} -> `), () => go(body, 'top'), pop, () => text(paren ? ')' : '')); break;
+        case 'js': seq(() => text(`${paren ? '(' : ''}${names.join(' => ')} => `), () => go(body, 'top'), pop, () => text(paren ? ')' : '')); break;
+        case 'python': seq(() => text((paren ? '(' : '') + names.map((x) => `lambda ${x}: `).join('')), () => go(body, 'top'), pop, () => text(paren ? ')' : '')); break;
+        case 'lisp': seq(() => text(`(lambda (${names.join(' ')}) `), () => go(body, 'top'), pop, () => text(')')); break;
+        case 'wolfram': seq(() => text(names.map((x) => `Function[${x}, `).join('')), () => go(body, 'top'), pop, () => text(']'.repeat(names.length))); break;
       }
+      return;
     }
     const [head, ...args] = spine(n);
+    const parts: (() => void)[] = [];
     switch (lang) {
       case 'haskell': {
-        const s = [go(head, 'fn'), ...args.map((a) => go(a, 'arg'))].join(' ');
-        return pos === 'arg' ? `(${s})` : s;
+        const paren = pos === 'arg';
+        if (paren) parts.push(() => text('('));
+        parts.push(() => go(head, 'fn'));
+        for (const a of args) parts.push(() => text(' '), () => go(a, 'arg'));
+        if (paren) parts.push(() => text(')'));
+        break;
       }
-      case 'lisp': return `(${[go(head, 'fn'), ...args.map((a) => go(a, 'top'))].join(' ')})`;
-      case 'wolfram': return go(head, 'fn') + args.map((a) => `[${go(a, 'top')}]`).join('');
-      default: return go(head, 'fn') + args.map((a) => `(${go(a, 'top')})`).join(''); // js, python
+      case 'lisp':
+        parts.push(() => text('('), () => go(head, 'fn'));
+        for (const a of args) parts.push(() => text(' '), () => go(a, 'top'));
+        parts.push(() => text(')'));
+        break;
+      case 'wolfram':
+        parts.push(() => go(head, 'fn'));
+        for (const a of args) parts.push(() => text('['), () => go(a, 'top'), () => text(']'));
+        break;
+      default: // js, python
+        parts.push(() => go(head, 'fn'));
+        for (const a of args) parts.push(() => text('('), () => go(a, 'top'), () => text(')'));
     }
+    seq(...parts);
   };
-  return go(t, 'top');
+  go(t, 'top');
+  while (tasks.length) tasks.pop()!();
+  return out;
 }
 
 // ---------------------------------------------------------------------------

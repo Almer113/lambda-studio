@@ -43,6 +43,7 @@ const attempt = (id: string, label: string, f: () => string, note?: string | (()
     return { id, label, text, note: typeof note === 'function' ? note() : note };
   } catch (e) {
     if (e instanceof NotationError || e instanceof TooLarge) return { id, label, text: '', error: e.message };
+    if (e instanceof RangeError) return { id, label, text: '', error: 'Too deeply nested to print in this notation.' };
     return { id, label, text: '', error: (e as Error).message };
   }
 };
@@ -52,13 +53,17 @@ function lambdaRows(term: Term, fold: ReturnType<typeof useFolder>['fold'], avoi
     tagged: printLatex(term, { style, tags: true, ...(folded ? { fold, avoid } : {}) }),
     plain: printLatex(term, { style, ...(folded ? { fold, avoid } : {}) }),
   });
+  const row = (id: string, label: string, f: () => string, extra: Partial<Row> = {}): Row => {
+    const r = attempt(id, label, f, extra.note);
+    return r.error ? r : { ...r, ...extra };
+  };
   return [
-    { id: 'named', label: 'Named (with names)', text: printNamed(term, { fold, avoid }).text, tex: texOf('named', true) },
-    { id: 'expanded', label: 'Named (expanded)', text: printNamed(term).text, tex: texOf('named', false) },
-    { id: 'ascii', label: 'Named (ASCII \\)', text: printNamed(term, { lambda: '\\' }).text },
-    { id: 'debruijn0', label: 'De Bruijn (0-based)', text: printDeBruijn(term, 0).text, tex: texOf('debruijn0', false) },
-    { id: 'debruijn1', label: 'De Bruijn (1-based, Tromp)', text: printDeBruijn(term, 1).text, tex: texOf('debruijn1', false) },
-    { id: 'latex', label: 'LaTeX source', text: printLatex(term, { fold, avoid }), note: '⌜n⌝ needs amssymb' },
+    row('named', 'Named (with names)', () => printNamed(term, { fold, avoid }).text, { tex: texOf('named', true) }),
+    row('expanded', 'Named (expanded)', () => printNamed(term).text, { tex: texOf('named', false) }),
+    row('ascii', 'Named (ASCII \\)', () => printNamed(term, { lambda: '\\' }).text),
+    row('debruijn0', 'De Bruijn (0-based)', () => printDeBruijn(term, 0).text, { tex: texOf('debruijn0', false) }),
+    row('debruijn1', 'De Bruijn (1-based, Tromp)', () => printDeBruijn(term, 1).text, { tex: texOf('debruijn1', false) }),
+    row('latex', 'LaTeX source', () => printLatex(term, { fold, avoid }), { note: '⌜n⌝ needs amssymb' }),
   ];
 }
 
@@ -87,8 +92,8 @@ function bitRows(term: Term): Row[] {
     const bytes = bitsToBytes(bits);
     rows.push({ id: 'blc8', label: 'BLC8 bytes', text: bytesToHex(bytes), note: `${bytes.length} byte${bytes.length === 1 ? '' : 's'} · base64 ${bytesToBase64(bytes)}` });
   } catch (e) { rows.push({ id: 'blc', label: 'Binary λ-calculus', text: '', error: (e as Error).message }); }
-  if (size(term) < 3000) rows.push({ id: 'box', label: 'Diagram (box characters)', text: toBoxChars(layout(term)), mono: true });
-  rows.push({ id: 'json', label: 'JSON AST', text: printJSON(term) });
+  if (size(term) < 3000) rows.push({ ...attempt('box', 'Diagram (box characters)', () => toBoxChars(layout(term))), mono: true });
+  rows.push(attempt('json', 'JSON AST', () => printJSON(term)));
   return rows;
 }
 
@@ -104,7 +109,7 @@ export function Conversions() {
 
   const cl = useMemo<CL | Error | null>(() => {
     if (!term || tooBig || !open.combinators) return null;
-    try { return toCL(term, algorithm, 400_000); } catch (e) { return e as Error; }
+    try { return toCL(term, algorithm, 400_000); } catch (e) { return e instanceof RangeError ? new Error('Too deeply nested to convert to combinators.') : e as Error; }
   }, [term, tooBig, algorithm, open.combinators]);
   const sizes = useMemo(() => {
     if (!term || tooBig || !open.combinators || size(term) > 2000) return null;
@@ -114,10 +119,14 @@ export function Conversions() {
   const groups = useMemo(() => {
     if (!term || tooBig) return null;
     const out: Partial<Record<Group, Row[]>> = {};
-    if (open.lambda) out.lambda = lambdaRows(term, fold, avoid);
-    if (open.combinators && cl) out.combinators = combinatorRows(cl);
-    if (open.code) out.code = codeRows(term);
-    if (open.bits) out.bits = bitRows(term);
+    // a whole group failing (e.g. on an extremely deep term) shows as one error row
+    const safe = (g: Group, f: () => Row[]) => {
+      try { out[g] = f(); } catch (e) { out[g] = [attempt(g, GROUPS.find((x) => x.id === g)!.title, () => { throw e; })]; }
+    };
+    if (open.lambda) safe('lambda', () => lambdaRows(term, fold, avoid));
+    if (open.combinators && cl) safe('combinators', () => combinatorRows(cl));
+    if (open.code) safe('code', () => codeRows(term));
+    if (open.bits) safe('bits', () => bitRows(term));
     return out;
   }, [term, tooBig, fold, avoid, cl, open]);
 
@@ -167,7 +176,7 @@ function OutputRow({ row }: { row: Row }) {
   const [asTex, setAsTex] = useTexSetting(id);
   const hover = useStore((s) => s.hover);
   const setHover = useStore((s) => s.setHover);
-  const tex = useMemo(() => (asTex && row.tex && text ? row.tex() : null), [asTex, row, text]);
+  const tex = useMemo(() => { try { return asTex && row.tex && text ? row.tex() : null; } catch { return null; } }, [asTex, row, text]);
   const shown = text.length > SHOW ? text.slice(0, SHOW) : text;
   return (
     <div className="out-row">

@@ -23,53 +23,68 @@ export const lams = (n: number, body: Term, hints: (string | undefined)[] = []):
 // ---------------------------------------------------------------------------
 // Memoized structural properties (safe because terms are immutable).
 
+// Every traversal below uses an explicit stack, never recursion: terms can be thousands of
+// levels deep (the Church numeral 3600 is), and worker threads have small call stacks.
+
+const REC_LIMIT = 2000;
+const TOO_DEEP = { tooDeep: true };
+
+/** Bottom-up fold with a per-node memo, safe at any depth. */
+function memoFold<R>(t: Term, memo: WeakMap<Term, R>, leaf: (n: Var | Free) => R,
+  onLam: (n: Lam, body: R) => R, onApp: (fn: R, arg: R) => R): R {
+  const get = (n: Term): R | undefined => (n.tag === 'var' || n.tag === 'free' ? leaf(n) : memo.get(n));
+  const r0 = get(t);
+  if (r0 !== undefined) return r0;
+  // Plain recursion is ~2.5× faster, so use it until the term gets deep, then switch to the
+  // explicit stack (whatever the recursion memoized so far is reused).
+  const rec = (n: Term, d: number): R => {
+    const m = get(n);
+    if (m !== undefined) return m;
+    if (d > REC_LIMIT) throw TOO_DEEP;
+    const r = n.tag === 'lam' ? onLam(n, rec(n.body, d + 1)) : onApp(rec((n as App).fn, d + 1), rec((n as App).arg, d + 1));
+    memo.set(n, r);
+    return r;
+  };
+  try { return rec(t, 0); } catch (e) { if (e !== TOO_DEEP) throw e; }
+  const stack: Term[] = [t];
+  while (stack.length) {
+    const n = stack[stack.length - 1];
+    if (n.tag === 'lam') {
+      const b = get(n.body);
+      if (b === undefined) { stack.push(n.body); continue; }
+      memo.set(n, onLam(n, b));
+    } else if (n.tag === 'app') {
+      const f = get(n.fn), a = get(n.arg);
+      if (f === undefined || a === undefined) {
+        if (a === undefined) stack.push(n.arg);
+        if (f === undefined) stack.push(n.fn);
+        continue;
+      }
+      memo.set(n, onApp(f, a));
+    }
+    stack.pop();
+  }
+  return memo.get(t)!;
+}
+
 const sizeMemo = new WeakMap<Term, number>();
 /** Number of nodes. */
 export function size(t: Term): number {
-  if (t.tag === 'var' || t.tag === 'free') return 1;
-  const m = sizeMemo.get(t);
-  if (m !== undefined) return m;
-  const s = t.tag === 'lam' ? 1 + size(t.body) : 1 + size(t.fn) + size(t.arg);
-  sizeMemo.set(t, s);
-  return s;
+  return memoFold(t, sizeMemo, () => 1, (_, b) => 1 + b, (f, a) => 1 + f + a);
 }
 
 const maxFreeMemo = new WeakMap<Term, number>();
 /** Smallest n such that wrapping t in n lambdas leaves no dangling indices. */
 export function maxFree(t: Term): number {
-  switch (t.tag) {
-    case 'var': return t.i + 1;
-    case 'free': return 0;
-    default: {
-      const m = maxFreeMemo.get(t);
-      if (m !== undefined) return m;
-      const r = t.tag === 'lam' ? Math.max(0, maxFree(t.body) - 1) : Math.max(maxFree(t.fn), maxFree(t.arg));
-      maxFreeMemo.set(t, r);
-      return r;
-    }
-  }
+  return memoFold(t, maxFreeMemo, n => (n.tag === 'var' ? n.i + 1 : 0), (_, b) => Math.max(0, b - 1), Math.max);
 }
 
 const freeNamesMemo = new WeakMap<Term, ReadonlySet<string>>();
 const EMPTY: ReadonlySet<string> = new Set();
 /** Named free variables (from unresolved identifiers). */
 export function freeNames(t: Term): ReadonlySet<string> {
-  switch (t.tag) {
-    case 'var': return EMPTY;
-    case 'free': return new Set([t.name]);
-    default: {
-      const m = freeNamesMemo.get(t);
-      if (m) return m;
-      let r: ReadonlySet<string>;
-      if (t.tag === 'lam') r = freeNames(t.body);
-      else {
-        const a = freeNames(t.fn), b = freeNames(t.arg);
-        r = a.size === 0 ? b : b.size === 0 ? a : new Set([...a, ...b]);
-      }
-      freeNamesMemo.set(t, r);
-      return r;
-    }
-  }
+  return memoFold(t, freeNamesMemo, n => (n.tag === 'free' ? new Set([n.name]) : EMPTY), (_, b) => b,
+    (a, b) => (a.size === 0 ? b : b.size === 0 ? a : new Set([...a, ...b])));
 }
 
 export const isClosed = (t: Term) => maxFree(t) === 0 && freeNames(t).size === 0;
@@ -83,29 +98,54 @@ function strHash(s: string): number {
 }
 /** Structural hash (alpha-invariant, ignores hints). */
 export function hash(t: Term): number {
-  switch (t.tag) {
-    case 'var': return mix(0x9e3779b9, t.i + 1);
-    case 'free': return mix(0x85ebca6b, strHash(t.name));
-    default: {
-      const m = hashMemo.get(t);
-      if (m !== undefined) return m;
-      const h = t.tag === 'lam' ? mix(mix(0xc2b2ae35, 7), hash(t.body)) : mix(mix(0x27d4eb2f, hash(t.fn)), hash(t.arg));
-      hashMemo.set(t, h);
-      return h;
-    }
-  }
+  return memoFold(t, hashMemo,
+    n => (n.tag === 'var' ? mix(0x9e3779b9, n.i + 1) : mix(0x85ebca6b, strHash(n.name))),
+    (_, b) => mix(mix(0xc2b2ae35, 7), b),
+    (f, a) => mix(mix(0x27d4eb2f, f), a));
 }
 
 /** Alpha-equivalence (structural equality of nameless terms). */
-export function equal(a: Term, b: Term): boolean {
-  if (a === b) return true;
-  if (a.tag !== b.tag || hash(a) !== hash(b)) return false;
-  switch (a.tag) {
-    case 'var': return a.i === (b as Var).i;
-    case 'free': return a.name === (b as Free).name;
-    case 'lam': return equal(a.body, (b as Lam).body);
-    case 'app': return equal(a.fn, (b as App).fn) && equal(a.arg, (b as App).arg);
+export function equal(a0: Term, b0: Term): boolean {
+  const stack: Term[] = [a0, b0];
+  while (stack.length) {
+    const b = stack.pop()!, a = stack.pop()!;
+    if (a === b) continue;
+    if (a.tag !== b.tag || hash(a) !== hash(b)) return false;
+    switch (a.tag) {
+      case 'var': if (a.i !== (b as Var).i) return false; break;
+      case 'free': if (a.name !== (b as Free).name) return false; break;
+      case 'lam': stack.push(a.body, (b as Lam).body); break;
+      case 'app': stack.push(a.arg, (b as App).arg, a.fn, (b as App).fn); break;
+    }
   }
+  return true;
+}
+
+/**
+ * Rebuild a term top-down with a binder-depth counter, iteratively. `visit(n, depth)` returns
+ * the replacement for n, or null to descend into its children. Unchanged subterms keep their
+ * identity, so sharing (and the memo tables above) survive.
+ */
+export function rewrite(t: Term, depth0: number, visit: (n: Term, depth: number) => Term | null): Term {
+  const nodes: Term[] = [t], depths: number[] = [depth0], post: boolean[] = [false];
+  const out: Term[] = [];
+  while (nodes.length) {
+    const n = nodes.pop()!, d = depths.pop()!, done = post.pop()!;
+    if (!done) {
+      const r = visit(n, d);
+      if (r !== null) { out.push(r); continue; }
+      nodes.push(n); depths.push(d); post.push(true);
+      if (n.tag === 'lam') { nodes.push(n.body); depths.push(d + 1); post.push(false); }
+      else if (n.tag === 'app') { nodes.push(n.arg, n.fn); depths.push(d, d); post.push(false, false); }
+    } else if (n.tag === 'lam') {
+      const b = out.pop()!;
+      out.push(b === n.body ? n : lam(b, n.hint));
+    } else if (n.tag === 'app') {
+      const a = out.pop()!, f = out.pop()!;
+      out.push(f === n.fn && a === n.arg ? n : app(f, a));
+    }
+  }
+  return out[0];
 }
 
 // ---------------------------------------------------------------------------
@@ -124,13 +164,23 @@ export function getAt(t: Term, path: Path): Term {
   return cur;
 }
 
-export function replaceAt(t: Term, path: Path, sub: Term, k = 0): Term {
-  if (k === path.length) return sub;
-  const c = path[k];
-  if (c === 'b' && t.tag === 'lam') return lam(replaceAt(t.body, path, sub, k + 1), t.hint);
-  if (c === 'f' && t.tag === 'app') return app(replaceAt(t.fn, path, sub, k + 1), t.arg);
-  if (c === 'a' && t.tag === 'app') return app(t.fn, replaceAt(t.arg, path, sub, k + 1));
-  throw new Error(`Invalid path ${path}`);
+export function replaceAt(t: Term, path: Path, sub: Term): Term {
+  const spine: Term[] = [];
+  let cur = t;
+  for (const c of path) {
+    spine.push(cur);
+    if (c === 'b' && cur.tag === 'lam') cur = cur.body;
+    else if (c === 'f' && cur.tag === 'app') cur = cur.fn;
+    else if (c === 'a' && cur.tag === 'app') cur = cur.arg;
+    else throw new Error(`Invalid path ${path}`);
+  }
+  let r = sub;
+  for (let k = path.length - 1; k >= 0; k--) {
+    const n = spine[k];
+    if (n.tag === 'lam') r = lam(r, n.hint);
+    else if (n.tag === 'app') r = path[k] === 'f' ? app(r, n.arg) : app(n.fn, r);
+  }
+  return r;
 }
 
 /** Number of lambdas crossed on the way down a path (binder depth at that position). */

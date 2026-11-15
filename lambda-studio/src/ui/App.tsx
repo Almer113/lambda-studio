@@ -10,6 +10,7 @@ import { ExportDialog } from './ExportDialog';
 import { ToolsPanel } from './tools';
 import { Tutorial } from './Tutorial';
 import { Help, useShortcuts } from './Help';
+import { Guard } from './Boundary';
 
 type Tab = 'edit' | 'diagram' | 'tools' | 'convert' | 'library';
 
@@ -28,7 +29,7 @@ export function App() {
         ))}
       </nav>
       <main className="layout">
-        <aside className="col-left"><Library /><DataPanel /></aside>
+        <aside className="col-left"><Guard name="Library"><Library /></Guard><Guard name="Encode data"><DataPanel /></Guard></aside>
         <section className="col-center">
           <div className="panel editor-panel">
             <div className="panel-head">
@@ -39,19 +40,19 @@ export function App() {
               </span>
             </div>
             <Editor />
-            {preview && <SourcePreview />}
+            {preview && <Guard name="Preview"><SourcePreview /></Guard>}
           </div>
-          <CurrentTerm />
-          <Controls />
-          <DiagramView />
-          <ToolsPanel />
+          <Guard name="Current term"><CurrentTerm /></Guard>
+          <Guard name="Controls"><Controls /></Guard>
+          <Guard name="Tromp diagram"><DiagramView /></Guard>
+          <Guard name="Tools"><ToolsPanel /></Guard>
         </section>
         <aside className="col-right">
-          <Inspector />
-          <Conversions />
+          <Guard name="Inspector"><Inspector /></Guard>
+          <Guard name="Notations"><Conversions /></Guard>
         </aside>
       </main>
-      <ExportDialog />
+      <Guard name="Export"><ExportDialog /></Guard>
       <Tutorial />
       <Help />
     </div>

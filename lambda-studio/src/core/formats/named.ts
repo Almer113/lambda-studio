@@ -364,15 +364,24 @@ export function printNamed(t: Term, opts: PrintOptions = {}): Printed {
     for (let k = 1; ; k++) if (!taken(base + k)) return base + k;
   };
 
-  const emit = (n: Term, path: Path, pos: 'top' | 'fn' | 'arg') => {
+  // Iterative printing (an explicit task stack): terms can be far deeper than the call stack.
+  // Tasks are pushed in reverse order of execution.
+  const tasks: (() => void)[] = [];
+  const emit = (n: Term, path: Path, pos: 'top' | 'fn' | 'arg') => tasks.push(() => visit(n, path, pos));
+  const text = (s: string) => tasks.push(() => { out += s; });
+  const visit = (n: Term, path: Path, pos: 'top' | 'fn' | 'arg') => {
     const start = out.length;
+    const finish = () => spans.push({ path, from: start, to: out.length });
     const folded = fold && n.tag !== 'var' && n.tag !== 'free' ? fold(n) : null;
     if (folded !== null) {
       out += folded;
+      finish();
     } else if (n.tag === 'var') {
       out += n.i < ctx.length ? ctx[ctx.length - 1 - n.i] : `_${n.i - ctx.length}`;
+      finish();
     } else if (n.tag === 'free') {
       out += n.name;
+      finish();
     } else if (n.tag === 'lam') {
       const paren = pos !== 'top';
       if (paren) out += '(';
@@ -389,23 +398,27 @@ export function printNamed(t: Term, opts: PrintOptions = {}): Printed {
         p += 'b';
         if (multi && body.tag === 'lam' && !(fold && fold(body) !== null)) { cur = body; continue; }
         out += '.';
+        tasks.push(() => {
+          for (const s of inner) spans.push({ path: s.path, from: s.from, to: out.length });
+          for (let k = 0; k <= inner.length; k++) ctx.pop();
+          if (paren) out += ')';
+          finish();
+        });
         emit(body, p, 'top');
         break;
       }
-      for (const s of inner) spans.push({ path: s.path, from: s.from, to: out.length });
-      for (let k = 0; k <= inner.length; k++) ctx.pop();
-      if (paren) out += ')';
     } else {
-      emit(n.fn, path + 'f', 'fn');
-      out += ' ';
+      tasks.push(finish);
       const a = n.arg;
       const needParen = (a.tag === 'app' || a.tag === 'lam') && !(fold && fold(a) !== null);
-      if (needParen && a.tag === 'app') { out += '('; emit(a, path + 'a', 'top'); out += ')'; }
+      if (needParen && a.tag === 'app') { text(')'); emit(a, path + 'a', 'top'); text('('); }
       else emit(a, path + 'a', a.tag === 'lam' && needParen ? 'arg' : 'top');
+      text(' ');
+      emit(n.fn, path + 'f', 'fn');
     }
-    spans.push({ path, from: start, to: out.length });
   };
   emit(t, '', 'top');
+  while (tasks.length) tasks.pop()!();
   return { text: out, spans };
 }
 
