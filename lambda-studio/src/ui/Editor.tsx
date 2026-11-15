@@ -6,6 +6,7 @@ import { StreamLanguage, syntaxHighlighting, HighlightStyle, bracketMatching } f
 import { setDiagnostics } from '@codemirror/lint';
 import { tags } from '@lezer/highlight';
 import { useStore } from './store';
+import { autoLambdaEdit } from './autoLambda';
 
 const lambdaLang = StreamLanguage.define<{ defLine: boolean }>({
   startState: () => ({ defLine: false }),
@@ -60,11 +61,12 @@ export function Editor() {
 
   useEffect(() => {
     const autoLambda = EditorView.inputHandler.of((v, from, to, text) => {
-      if (text === '\\' && useStore.getState().settings.autoLambda) {
-        v.dispatch({ changes: { from, to, insert: 'λ' }, selection: { anchor: from + 1 } });
-        return true;
-      }
-      return false;
+      const st = useStore.getState();
+      if (!st.settings.autoLambda) return false;
+      const e = autoLambdaEdit(v.state.doc.toString(), from, to, text, st.format === 'latex');
+      if (!e) return false;
+      v.dispatch({ changes: { from: e.from, to: e.to, insert: e.insert }, selection: { anchor: e.anchor } });
+      return true;
     });
     const runKeys = keymap.of([
       { key: 'Mod-Enter', run: () => { useStore.getState().runToNormal(); return true; } },

@@ -12,7 +12,14 @@ import { termStats } from '../core/stats';
 import { type Term, size } from '../core/term';
 import { FORMATS, preludeInfo, type FormatId } from '../core/program';
 import { EXAMPLES } from '../core/prelude';
-import { TermText } from './TermText';
+import { TermText, reduceInnermost } from './TermText';
+import { printLatex, type TexStyle } from '../core/formats/latex';
+import { TexView, ViewToggle } from './Tex';
+
+function useTexSetting(id: string): [boolean, (v: boolean) => void] {
+  const tex = useStore((s) => s.settings.tex[id] ?? false);
+  return [tex, (v: boolean) => { const st = useStore.getState(); st.setSetting('tex', { ...st.settings.tex, [id]: v }); }];
+}
 
 const BIG = 25000;
 
@@ -35,14 +42,24 @@ export function CurrentTerm() {
   const printed = useMemo<Printed | null>(() => (term && size(term) < BIG * 4 ? printNamed(term, { fold, avoid }) : null), [term, fold, avoid]);
   const redex = useMemo(() => (term && settings.showRedex ? findRedex(term, settings) : null), [term, settings]);
   const via = history[index]?.via;
+  const [asTex, setAsTex] = useTexSetting('current');
+  const hover = useStore((s) => s.hover);
+  const setHover = useStore((s) => s.setHover);
+  const tex = useMemo(() => (asTex && term && printed ? printLatex(term, { fold, avoid, tags: true }) : null), [asTex, term, printed, fold, avoid]);
   return (
     <div className="panel current">
       <div className="panel-head">
         <h2>Current term {index > 0 && <span className="sub">step {index}{via?.kind ? ` · ${via.kind === 'nbe' ? 'fast normalizer' : via.kind === 'run' ? 'run' : via.kind + '-reduction'}` : ''}</span>}</h2>
-        <label className="check"><input type="checkbox" checked={settings.foldNames} onChange={(e) => useStore.getState().setSetting('foldNames', e.target.checked)} /> Show names &amp; numerals</label>
+        <span className="head-tools">
+          <label className="check"><input type="checkbox" checked={settings.foldNames} onChange={(e) => useStore.getState().setSetting('foldNames', e.target.checked)} /> Show names &amp; numerals</label>
+          <ViewToggle tex={asTex} onChange={setAsTex} />
+        </span>
       </div>
       {!term && <div className="empty">Nothing to show yet.</div>}
-      {term && printed && <TermText printed={printed} redex={redex} />}
+      {term && printed && tex !== null && (
+        <TexView tex={tex} className="term-tex" hover={hover} redex={redex} onHover={(p) => setHover(p, 'text')} onDoubleClick={reduceInnermost} />
+      )}
+      {term && printed && tex === null && <TermText printed={printed} redex={redex} />}
       {term && !printed && <div className="empty">Term too large to print ({size(term)} nodes).</div>}
       {via?.note && <div className="note">{via.note}</div>}
     </div>
@@ -103,41 +120,62 @@ export function Conversions() {
       <div className="panel-head"><h2>Notations</h2></div>
       {!term && <div className="empty">—</div>}
       {rows === null && <button onClick={() => setForce(true)}>Term is large ({size(term!)} nodes) — compute notations</button>}
-      {rows?.map((r) => <OutputRow key={r.label} {...r} />)}
+      {rows?.map((r) => <OutputRow key={r.id} row={r} />)}
     </div>
   );
 }
 
-function conversions(term: Term, fold: ReturnType<typeof useFolder>['fold'], avoid: ReadonlySet<string>) {
-  const out: { label: string; text: string; note?: string; mono?: boolean }[] = [];
-  out.push({ label: 'Named (with names)', text: printNamed(term, { fold, avoid }).text });
-  out.push({ label: 'Named (expanded)', text: printNamed(term).text });
-  out.push({ label: 'Named (ASCII \\)', text: printNamed(term, { lambda: '\\' }).text });
-  out.push({ label: 'De Bruijn (0-based)', text: printDeBruijn(term, 0).text });
-  out.push({ label: 'De Bruijn (1-based, Tromp)', text: printDeBruijn(term, 1).text });
+interface Row { id: string; label: string; text: string; note?: string; mono?: boolean; tex?: () => { tagged: string; plain: string } }
+
+function conversions(term: Term, fold: ReturnType<typeof useFolder>['fold'], avoid: ReadonlySet<string>): Row[] {
+  const out: Row[] = [];
+  const texOf = (style: TexStyle, folded: boolean) => () => ({
+    tagged: printLatex(term, { style, tags: true, ...(folded ? { fold, avoid } : {}) }),
+    plain: printLatex(term, { style, ...(folded ? { fold, avoid } : {}) }),
+  });
+  out.push({ id: 'named', label: 'Named (with names)', text: printNamed(term, { fold, avoid }).text, tex: texOf('named', true) });
+  out.push({ id: 'expanded', label: 'Named (expanded)', text: printNamed(term).text, tex: texOf('named', false) });
+  out.push({ id: 'ascii', label: 'Named (ASCII \\)', text: printNamed(term, { lambda: '\\' }).text });
+  out.push({ id: 'debruijn0', label: 'De Bruijn (0-based)', text: printDeBruijn(term, 0).text, tex: texOf('debruijn0', false) });
+  out.push({ id: 'debruijn1', label: 'De Bruijn (1-based, Tromp)', text: printDeBruijn(term, 1).text, tex: texOf('debruijn1', false) });
+  out.push({ id: 'latex', label: 'LaTeX source', text: printLatex(term, { fold, avoid }), note: '⌜n⌝ needs amssymb' });
   try {
     const bits = encodeBLC(term);
-    out.push({ label: 'Binary λ-calculus', text: bits, note: `${bits.length} bits · hex ${bitsToHex(bits)}` });
-  } catch (e) { out.push({ label: 'Binary λ-calculus', text: '', note: (e as Error).message }); }
-  if (size(term) < 3000) out.push({ label: 'Diagram (box characters)', text: toBoxChars(layout(term)), mono: true });
-  out.push({ label: 'JSON AST', text: printJSON(term) });
+    out.push({ id: 'blc', label: 'Binary λ-calculus', text: bits, note: `${bits.length} bits · hex ${bitsToHex(bits)}` });
+  } catch (e) { out.push({ id: 'blc', label: 'Binary λ-calculus', text: '', note: (e as Error).message }); }
+  if (size(term) < 3000) out.push({ id: 'box', label: 'Diagram (box characters)', text: toBoxChars(layout(term)), mono: true });
+  out.push({ id: 'json', label: 'JSON AST', text: printJSON(term) });
   return out;
 }
 
-function OutputRow({ label, text, note, mono }: { label: string; text: string; note?: string; mono?: boolean }) {
+function CopyButton({ text, label = 'Copy' }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
+  return (
+    <button className="copy" onClick={() => { navigator.clipboard?.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); }).catch(() => {}); }}>
+      {copied ? 'Copied' : label}
+    </button>
+  );
+}
+
+function OutputRow({ row }: { row: Row }) {
+  const { id, label, text, note, mono } = row;
+  const [asTex, setAsTex] = useTexSetting(id);
+  const hover = useStore((s) => s.hover);
+  const setHover = useStore((s) => s.setHover);
+  const tex = useMemo(() => (asTex && row.tex && text ? row.tex() : null), [asTex, row, text]);
   return (
     <div className="out-row">
       <div className="out-head">
         <span className="out-label">{label}</span>
         {note && <span className="out-note">{note}</span>}
-        {text && (
-          <button className="copy" onClick={() => { navigator.clipboard?.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); }).catch(() => {}); }}>
-            {copied ? 'Copied' : 'Copy'}
-          </button>
-        )}
+        <span className="out-tools">
+          {row.tex && text && <ViewToggle tex={asTex} onChange={setAsTex} />}
+          {text && <CopyButton text={text} />}
+          {tex && <CopyButton text={tex.plain} label="LaTeX" />}
+        </span>
       </div>
-      {text && <pre className={mono ? 'out-text box' : 'out-text'}>{text}</pre>}
+      {tex && <TexView tex={tex.tagged} className="out-tex" hover={hover} onHover={(p) => setHover(p, 'text')} onDoubleClick={reduceInnermost} />}
+      {text && !tex && <pre className={mono ? 'out-text box' : 'out-text'}>{text}</pre>}
     </div>
   );
 }

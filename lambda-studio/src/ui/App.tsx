@@ -3,12 +3,16 @@ import { Editor } from './Editor';
 import { DiagramView } from './DiagramView';
 import { Header, Library, CurrentTerm, Controls, Conversions, Inspector } from './panels';
 import { useApplyTheme } from './theme';
+import { SourcePreview } from './SourcePreview';
+import { useStore } from './store';
 
 type Tab = 'edit' | 'diagram' | 'convert' | 'library';
 
 export function App() {
   useApplyTheme();
   const [tab, setTab] = useState<Tab>('diagram');
+  const preview = useStore((s) => s.settings.sourcePreview);
+  const setSetting = useStore((s) => s.setSetting);
   return (
     <div className="app" data-tab={tab}>
       <Header />
@@ -20,7 +24,17 @@ export function App() {
       <main className="layout">
         <aside className="col-left"><Library /></aside>
         <section className="col-center">
-          <div className="panel editor-panel"><div className="panel-head"><h2>Source</h2><span className="sub">Type <kbd>\</kbd> for λ · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs</span></div><Editor /></div>
+          <div className="panel editor-panel">
+            <div className="panel-head">
+              <h2>Source</h2>
+              <span className="head-tools">
+                <span className="sub">Type <kbd>\</kbd> for λ · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs</span>
+                <label className="check" title="Typeset preview of the source"><input type="checkbox" checked={preview} onChange={(e) => setSetting('sourcePreview', e.target.checked)} /> Preview</label>
+              </span>
+            </div>
+            <Editor />
+            {preview && <SourcePreview />}
+          </div>
           <CurrentTerm />
           <Controls />
           <DiagramView />

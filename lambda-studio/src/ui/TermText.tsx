@@ -11,7 +11,6 @@ interface Props { printed: Printed; redex: Path | null; maxHighlight?: number }
 export function TermText({ printed, redex, maxHighlight = 30000 }: Props) {
   const hover = useStore((s) => s.hover);
   const setHover = useStore((s) => s.setHover);
-  const reduceAt = useStore((s) => s.reduceAt);
   const ref = useRef<HTMLPreElement>(null);
   const { text, spans } = printed;
 
@@ -64,22 +63,21 @@ export function TermText({ printed, redex, maxHighlight = 30000 }: Props) {
       className="term-text"
       onMouseMove={(e) => { const o = offsetFromEvent(e); setHover(o === null ? null : pathAtOffset(o), 'text'); }}
       onMouseLeave={() => setHover(null)}
-      onDoubleClick={(e) => {
-        const o = offsetFromEvent(e);
-        if (o === null) return;
-        // reduce the innermost redex (application of a λ) containing the click
-        const st = useStore.getState();
-        const term = currentTerm(st);
-        if (!term) return;
-        let p = pathAtOffset(o);
-        while (p !== null) {
-          try { if (redexKindAt(term, p, st.settings.eta)) { reduceAt(p); return; } } catch { /* folded path */ }
-          if (p === '') break;
-          p = p.slice(0, -1);
-        }
-      }}
+      onDoubleClick={(e) => { const o = offsetFromEvent(e); if (o !== null) reduceInnermost(pathAtOffset(o)); }}
     >
       {runs.map((r) => <span key={r.from} data-from={r.from} className={r.cls || undefined}>{text.slice(r.from, r.to)}</span>)}
     </pre>
   );
+}
+
+/** Reduce the innermost redex (beta, or eta when enabled) at or above `p` in the current term. */
+export function reduceInnermost(p: Path | null) {
+  const st = useStore.getState();
+  const term = currentTerm(st);
+  if (!term) return;
+  while (p !== null) {
+    try { if (redexKindAt(term, p, st.settings.eta)) { st.reduceAt(p); return; } } catch { /* folded path */ }
+    if (p === '') break;
+    p = p.slice(0, -1);
+  }
 }

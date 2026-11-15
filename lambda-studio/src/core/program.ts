@@ -6,10 +6,11 @@ import { parseStatements, Resolver, ParseError, type DefSource, type Diagnostic,
 import { parseDeBruijn, printDeBruijn, deBruijnClosedUnder } from './formats/debruijn';
 import { decodeBLC, encodeBLC } from './formats/blc';
 import { parseJSON, printJSON } from './formats/json';
+import { looksLikeLatex, normalizeLatex, mapSpan, printLatex } from './formats/latex';
 import { PRELUDE } from './prelude';
 import { FoldTable } from './fold';
 
-export type FormatId = 'named' | 'debruijn0' | 'debruijn1' | 'blc' | 'json';
+export type FormatId = 'named' | 'debruijn0' | 'debruijn1' | 'blc' | 'json' | 'latex';
 
 export const FORMATS: { id: FormatId; name: string; example: string }[] = [
   { id: 'named', name: 'Named λ', example: 'λf x.f (f x)' },
@@ -17,6 +18,7 @@ export const FORMATS: { id: FormatId; name: string; example: string }[] = [
   { id: 'debruijn1', name: 'De Bruijn (1-based, Tromp)', example: 'λλ2 (2 1)' },
   { id: 'blc', name: 'Binary λ-calculus (BLC)', example: '0000011100111010' },
   { id: 'json', name: 'JSON AST', example: '{"type":"lam","body":…}' },
+  { id: 'latex', name: 'LaTeX', example: '\lambda f.\,\lambda x.\, f\,(f\,x)' },
 ];
 
 export interface DefInfo { name: string; origin: 'prelude' | 'user'; term: Term | null; error?: string; recursive?: boolean; span?: Span; doc?: string; group?: string }
@@ -77,6 +79,7 @@ export function preludeTerm(name: string): Term {
 export function detectFormat(src: string, defaultBase: 0 | 1 = 1): FormatId {
   const s = src.replace(/(--|\/\/|#).*$/gm, '').trim();
   if (s.startsWith('{')) return 'json';
+  if (looksLikeLatex(src)) return 'latex';
   if (/^[01\s]+$/.test(s) && s.replace(/\s/g, '').length >= 4) return 'blc';
   if (/[λ\\]/.test(s) && /^[λ\\().\s0-9]+$/.test(s) && /[0-9]/.test(s)) {
     if (/(^|[^0-9])0([^0-9]|$)/.test(s)) return 'debruijn0';
@@ -113,8 +116,28 @@ export function parseProgram(src: string, format: FormatId | 'auto' = 'auto', op
         return { ...base, term: parseJSON(src) };
       case 'named':
         return parseNamedProgram(src, opts, base);
+      case 'latex':
+        return parseLatexProgram(src, opts, base);
     }
   } catch (e) { return fail(e); }
+}
+
+/** LaTeX: normalise to plain notation, parse that, and map positions back into the LaTeX source. */
+function parseLatexProgram(src: string, opts: ProgramOptions, base: Program): Program {
+  const n = normalizeLatex(src);
+  let inner = detectFormat(n.text, opts.defaultDeBruijnBase ?? 1);
+  if (inner === 'latex' || inner === 'blc' || inner === 'json') inner = 'named';
+  const p = parseProgram(n.text, inner, opts);
+  const spans = new Map<Path, Span>();
+  for (const [k, s] of p.spans) spans.set(k, mapSpan(n, s));
+  return {
+    ...p,
+    format: 'latex',
+    detected: base.detected,
+    spans,
+    diagnostics: p.diagnostics.map((d) => ({ ...d, ...mapSpan(n, d) })),
+    defs: p.defs.map((d) => (d.span ? { ...d, span: mapSpan(n, d.span) } : d)),
+  };
 }
 
 function parseNamedProgram(src: string, opts: ProgramOptions, base: Program): Program {
@@ -184,5 +207,6 @@ export function printTerm(t: Term, fmt: FormatId): string {
     case 'debruijn1': return printDeBruijn(t, 1).text;
     case 'blc': return encodeBLC(t);
     case 'json': return printJSON(t);
+    case 'latex': return printLatex(t);
   }
 }

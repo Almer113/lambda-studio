@@ -370,7 +370,7 @@ lambda-studio/
 | **M0: Scaffold** | git init, Vite + React + TS, Vitest, lint, CI script, `.claude/launch.json` for preview | Empty app runs |
 | **M1: Core** | AST, named + de Bruijn (0/1) + JSON formats, substitution, step engine with all strategies, prelude, limits, worker | Calculator in the console / tests |
 | **M2: Diagrams + editor** | Tromp standard layout, SVG renderer, hover linking, redex highlight, ASCII output, CodeMirror editor, step/run/timeline UI | **First usable app:** type a term, see the diagram, step through reduction |
-| **M3: Universal converter** | BLC/BLC8, SKI/BCKW (4 algorithms), Unlambda, Iota, Jot, Lazy K, Haskell/JS/Python/Lisp, auto-detect, conversions panel, encode/decode of data | The "universal notation" goal reached |
+| **M3: Universal converter** | KaTeX-typeset views (current term, notations, live source preview) and LaTeX input, BLC/BLC8, SKI/BCKW (4 algorithms), Unlambda, Iota, Jot, Lazy K, Haskell/JS/Python/Lisp, auto-detect, conversions panel, encode/decode of data | The "universal notation" goal reached |
 | **M4: Animation + export** | v1 frame animation, then v2 smooth morph; colour modes; alternative style; SVG/PNG/GIF/WebM/TikZ/Typst/LaTeX/code exports; share links | Publication-quality diagrams and videos |
 | **M5: Algebra, generators, types** | Arithmetic/Boolean → λ, truth tables, numeric table + closed-form guess, ADT → encodings, random/enumerate/BBλ, type inference | All the "bridge" features |
 | **M6: Creator + polish** | Diagram-based editing actions, drag-and-drop library, tutorial mode, Canvas renderer for huge terms, accessibility, mobile, docs, single-file build | Release candidate |

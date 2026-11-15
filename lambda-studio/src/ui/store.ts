@@ -21,12 +21,18 @@ export interface Settings {
   maxSteps: number;
   maxSize: number;
   playSpeed: number; // steps per second
+  /** Typeset (KaTeX) instead of plain text, per view id ('current', 'named', 'debruijn0', …). */
+  tex: Record<string, boolean>;
+  /** Show a typeset preview of the source under the editor. */
+  sourcePreview: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   strategy: 'normal', eta: false, singleLetter: false, foldNames: true, numerals: true, zeroAs: '0',
   colorMode: 'binder', showRedex: true, autoLambda: true, theme: 'system',
   maxSteps: 10000, maxSize: 200000, playSpeed: 4,
+  tex: { current: true, named: true, expanded: true, debruijn0: true, debruijn1: true },
+  sourcePreview: true,
 };
 
 export interface Entry {
