@@ -3,7 +3,13 @@ import { type Term, type Path } from '../core/term';
 import { parseProgram, type FormatId, type Program } from '../core/program';
 import { findRedex, stepAt, redexKindAt, type Strategy, type RedexKind } from '../core/reduce';
 import type { WorkerRequest, WorkerResponse } from '../worker/eval.worker';
+import EvalWorker from '../worker/eval.worker?worker&inline';
 import type { Algorithm } from '../core/combinators';
+import { applyEdit, rewriteSource, type EditAction } from '../core/edit';
+import { printNamed } from '../core/formats/named';
+import { makeFolder } from '../core/fold';
+import { getAt } from '../core/term';
+import { packDeep, unpackDeep } from '../core/pack';
 
 import type { ColorMode } from '../core/diagram/colors';
 import type { DiagramStyle } from '../core/diagram/layout';
@@ -71,6 +77,8 @@ interface State {
   index: number;
   hover: Path | null;
   hoverSource: 'diagram' | 'text' | null;
+  /** Subterm selected for editing (path in the current term). */
+  selected: Path | null;
   running: RunState | null;
   playing: boolean;
   message: { text: string; tone: 'info' | 'warn' | 'error' } | null;
@@ -80,6 +88,9 @@ interface State {
   setFormat(f: FormatId | 'auto'): void;
   setSetting<K extends keyof Settings>(k: K, v: Settings[K]): void;
   setHover(p: Path | null, from?: 'diagram' | 'text'): void;
+  select(p: Path | null): void;
+  /** Apply a structural edit to the current term and write the result back to the source. */
+  edit(action: EditAction, p: Path, arg?: Term, name?: string): string | null;
   stepForward(): boolean;
   stepBack(): void;
   goto(i: number): void;
@@ -133,9 +144,9 @@ let worker: Worker | null = null;
 let reqId = 0;
 function getWorker(onMsg: (m: WorkerResponse) => void): Worker {
   if (!worker) {
-    worker = new Worker(new URL('../worker/eval.worker.ts', import.meta.url), { type: 'module' });
+    worker = new EvalWorker();
   }
-  worker.onmessage = (e: MessageEvent<WorkerResponse>) => onMsg(e.data);
+  worker.onmessage = (e: MessageEvent<WorkerResponse>) => onMsg(unpackDeep(e.data));
   return worker;
 }
 function killWorker() { worker?.terminate(); worker = null; }
@@ -163,12 +174,12 @@ export const useStore = create<State>((set, get) => {
 
   return {
     source, format, settings, ...reset(program),
-    hover: null, hoverSource: null, running: null, insertText: null,
+    hover: null, hoverSource: null, selected: null, running: null, insertText: null,
 
     setSource(s) {
       if (get().running) get().stop();
       const p = compile(s, get().format, get().settings);
-      set({ source: s, ...reset(p) });
+      set({ source: s, ...reset(p), selected: null });
       save(get());
     },
     setFormat(f) {
@@ -183,6 +194,26 @@ export const useStore = create<State>((set, get) => {
       save(get());
     },
     setHover(p, from) { set({ hover: p, hoverSource: p === null ? null : from ?? null }); },
+    select(p) { set({ selected: p }); },
+    edit(action, p, arg, name) {
+      const st = get();
+      const term = st.history[st.index]?.term;
+      if (!term) return 'No term';
+      const next = applyEdit(term, p, action, arg, name);
+      if (!next) return 'This action does not apply here';
+      const fold = st.settings.foldNames ? makeFolder(st.program.foldTable, { numerals: st.settings.numerals, zeroAs: st.settings.zeroAs }) : undefined;
+      const avoid = new Set([...st.program.foldTable.names, ...(name ? [name] : [])]);
+      const newDefs = action === 'fold' && name ? [{ name, body: printNamed(getAt(term, p), { fold, avoid }).text }] : [];
+      const named = st.program.format === 'named' || st.program.format === 'haskell';
+      const src = rewriteSource(named ? st.source : '', printNamed(next, { fold, avoid }).text, newDefs);
+      if (st.running) st.stop();
+      const prog = compile(src, 'auto', st.settings);
+      let keep: Path | null = null;
+      if (prog.term) { try { getAt(prog.term, p); keep = p; } catch { keep = null; } }
+      set({ source: src, format: 'auto', ...reset(prog), selected: keep, message: { text: `Edited: ${action}. The source was rewritten from the current term.`, tone: 'info' } });
+      save(get());
+      return null;
+    },
 
     stepForward() {
       const { history, index, settings } = get();
@@ -234,7 +265,7 @@ export const useStore = create<State>((set, get) => {
         }
       });
       const req: WorkerRequest = { id, type: 'run', term: cur, opts: { strategy: settings.strategy, eta: settings.eta }, maxSteps: settings.maxSteps, maxSize: settings.maxSize, record: 2000 };
-      w.postMessage(req);
+      w.postMessage(packDeep(req));
     },
     normalizeFast() {
       const { history, index, settings } = get();
@@ -250,7 +281,7 @@ export const useStore = create<State>((set, get) => {
         } else set({ running: null, message: { text: m.message ?? 'Failed', tone: 'error' } });
       });
       const req: WorkerRequest = { id, type: 'normalize', term: cur, fuel: settings.maxSteps * 100 };
-      w.postMessage(req);
+      w.postMessage(packDeep(req));
     },
     stop() {
       if (get().running) { killWorker(); set({ running: null, message: { text: 'Stopped.', tone: 'warn' } }); }

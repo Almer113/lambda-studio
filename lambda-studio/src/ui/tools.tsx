@@ -18,7 +18,9 @@ import { LAWS, type LawResult } from '../core/algebra/laws';
 import { parseData, generate, ENCODINGS, DATA_EXAMPLES, type Encoding } from '../core/adt';
 import { Counter, randomClosedTerm } from '../core/generate';
 import { PRELUDE } from '../core/prelude';
+import { packDeep, unpackDeep } from '../core/pack';
 import type { ToolRequest, ToolResponse, EnumItem } from '../worker/tools.worker';
+import ToolsWorker from '../worker/tools.worker?worker&inline';
 import type { BBResult } from '../core/generate';
 
 const TABS: { id: ToolsTab; name: string; title: string }[] = [
@@ -63,18 +65,18 @@ function useJob() {
   useEffect(() => cancel, []);
   const run = (req: Req): Promise<ToolResponse> => {
     cancel();
-    const w = new Worker(new URL('../worker/tools.worker.ts', import.meta.url), { type: 'module' });
+    const w = new ToolsWorker();
     worker.current = w;
     setBusy({ done: 0, total: 0 });
     return new Promise((resolve, reject) => {
       w.onmessage = (e: MessageEvent<ToolResponse>) => {
-        const m = e.data;
+        const m = unpackDeep(e.data);
         if (m.type === 'progress') { setBusy({ done: m.done, total: m.total }); return; }
         w.terminate(); if (worker.current === w) { worker.current = null; setBusy(null); }
         if (m.type === 'error') reject(new Error(m.message)); else resolve(m);
       };
       w.onerror = (e) => { w.terminate(); setBusy(null); reject(new Error(e.message || 'Worker failed')); };
-      w.postMessage({ ...req, id: 1 });
+      w.postMessage(packDeep({ ...req, id: 1 }));
     });
   };
   return { run, busy, cancel };

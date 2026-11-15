@@ -8,11 +8,14 @@ import { SourcePreview } from './SourcePreview';
 import { useStore } from './store';
 import { ExportDialog } from './ExportDialog';
 import { ToolsPanel } from './tools';
+import { Tutorial } from './Tutorial';
+import { Help, useShortcuts } from './Help';
 
 type Tab = 'edit' | 'diagram' | 'tools' | 'convert' | 'library';
 
 export function App() {
   useApplyTheme();
+  useShortcuts();
   const [tab, setTab] = useState<Tab>('diagram');
   const preview = useStore((s) => s.settings.sourcePreview);
   const setSetting = useStore((s) => s.setSetting);
@@ -49,6 +52,8 @@ export function App() {
         </aside>
       </main>
       <ExportDialog />
+      <Tutorial />
+      <Help />
     </div>
   );
 }

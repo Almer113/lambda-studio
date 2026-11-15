@@ -3,6 +3,7 @@
 // enumeration / BBλ explorer. Each job reports progress and can be cancelled by terminating.
 
 import { type Term } from '../core/term';
+import { packDeep, unpackDeep } from '../core/pack';
 import { truthTable, type TruthTable } from '../core/algebra/boolean';
 import { evalAt, type Value } from '../core/algebra/numeric';
 import { checkLaw, type LawResult } from '../core/algebra/laws';
@@ -26,10 +27,10 @@ export type ToolResponse =
   | { id: number; type: 'enumerate'; items: EnumItem[]; total: number; normalizing: number; unknown: number; truncated: boolean }
   | { id: number; type: 'error'; message: string };
 
-const post = (m: ToolResponse) => (self as unknown as Worker).postMessage(m);
+const post = (m: ToolResponse) => (self as unknown as Worker).postMessage(packDeep(m));
 
 self.onmessage = (e: MessageEvent<ToolRequest>) => {
-  const req = e.data;
+  const req = unpackDeep(e.data);
   try {
     switch (req.type) {
       case 'truth':

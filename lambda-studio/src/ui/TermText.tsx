@@ -11,6 +11,8 @@ interface Props { printed: Printed; redex: Path | null; maxHighlight?: number }
 export function TermText({ printed, redex, maxHighlight = 30000 }: Props) {
   const hover = useStore((s) => s.hover);
   const setHover = useStore((s) => s.setHover);
+  const selected = useStore((s) => s.selected);
+  const select = useStore((s) => s.select);
   const ref = useRef<HTMLPreElement>(null);
   const { text, spans } = printed;
 
@@ -25,20 +27,21 @@ export function TermText({ printed, redex, maxHighlight = 30000 }: Props) {
   };
   const hl = spanOf(hover);
   const rx = redex !== null ? spans.find((x) => x.path === redex) ?? null : null;
+  const sel = spanOf(selected);
 
   const runs = useMemo(() => {
     if (text.length > maxHighlight) return [{ from: 0, to: text.length, cls: '' }];
     const cuts = new Set<number>([0, text.length]);
-    for (const s of [hl, rx]) if (s) { cuts.add(s.from); cuts.add(s.to); }
+    for (const s of [hl, rx, sel]) if (s) { cuts.add(s.from); cuts.add(s.to); }
     const pts = [...cuts].sort((a, b) => a - b);
     const out: { from: number; to: number; cls: string }[] = [];
     for (let k = 0; k < pts.length - 1; k++) {
       const a = pts[k], b = pts[k + 1];
-      const cls = [rx && a >= rx.from && b <= rx.to ? 'tx-redex' : '', hl && a >= hl.from && b <= hl.to ? 'tx-hover' : ''].join(' ').trim();
+      const cls = [rx && a >= rx.from && b <= rx.to ? 'tx-redex' : '', hl && a >= hl.from && b <= hl.to ? 'tx-hover' : '', sel && a >= sel.from && b <= sel.to ? 'tx-select' : ''].join(' ').trim();
       out.push({ from: a, to: b, cls });
     }
     return out;
-  }, [text, hl, rx, maxHighlight]);
+  }, [text, hl, rx, sel, maxHighlight]);
 
   const pathAtOffset = (off: number): Path | null => {
     let best: { path: Path; len: number } | null = null;
@@ -63,6 +66,7 @@ export function TermText({ printed, redex, maxHighlight = 30000 }: Props) {
       className="term-text"
       onMouseMove={(e) => { const o = offsetFromEvent(e); setHover(o === null ? null : pathAtOffset(o), 'text'); }}
       onMouseLeave={() => setHover(null)}
+      onClick={(e) => { if (e.detail > 1) return; const o = offsetFromEvent(e); const p = o === null ? null : pathAtOffset(o); select(p === selected ? null : p); }}
       onDoubleClick={(e) => { const o = offsetFromEvent(e); if (o !== null) reduceInnermost(pathAtOffset(o)); }}
     >
       {runs.map((r) => <span key={r.from} data-from={r.from} className={r.cls || undefined}>{text.slice(r.from, r.to)}</span>)}

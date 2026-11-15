@@ -4,8 +4,34 @@
     {
       "name": "lambda-studio",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "lambda-studio", "run", "dev", "--", "--port", "5173", "--strictPort"],
+      "runtimeArgs": [
+        "--prefix",
+        "lambda-studio",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5173",
+        "--strictPort"
+      ],
       "port": 5173
+    },
+    {
+      "name": "lambda-studio-single",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "--prefix",
+        "lambda-studio",
+        "vite",
+        "preview",
+        "lambda-studio",
+        "--outDir",
+        "dist-single",
+        "--port",
+        "5174",
+        "--strictPort"
+      ],
+      "port": 5174
     }
   ]
 }

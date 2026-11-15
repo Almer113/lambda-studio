@@ -13,6 +13,10 @@ import { describeMore } from '../core/data';
 import { TermText, reduceInnermost } from './TermText';
 import { printLatex } from '../core/formats/latex';
 import { TexView, ViewToggle } from './Tex';
+import { EditBar } from './EditBar';
+import { startDefDrag } from './dnd';
+import { useTutorial } from './Tutorial';
+import { useHelp } from './Help';
 
 function useTexSetting(id: string): [boolean, (v: boolean) => void] {
   const tex = useStore((s) => s.settings.tex[id] ?? false);
@@ -43,6 +47,8 @@ export function CurrentTerm() {
   const [asTex, setAsTex] = useTexSetting('current');
   const hover = useStore((s) => s.hover);
   const setHover = useStore((s) => s.setHover);
+  const selected = useStore((s) => s.selected);
+  const select = useStore((s) => s.select);
   const tex = useMemo(() => (asTex && term && printed ? printLatex(term, { fold, avoid, tags: true }) : null), [asTex, term, printed, fold, avoid]);
   return (
     <div className="panel current">
@@ -55,11 +61,13 @@ export function CurrentTerm() {
       </div>
       {!term && <div className="empty">Nothing to show yet.</div>}
       {term && printed && tex !== null && (
-        <TexView tex={tex} className="term-tex" hover={hover} redex={redex} onHover={(p) => setHover(p, 'text')} onDoubleClick={reduceInnermost} />
+        <TexView tex={tex} className="term-tex" hover={hover} redex={redex} onHover={(p) => setHover(p, 'text')} onDoubleClick={reduceInnermost} selected={selected} onSelect={select} />
       )}
       {term && printed && tex === null && <TermText printed={printed} redex={redex} />}
       {term && !printed && <div className="empty">Term too large to print ({size(term)} nodes).</div>}
       {via?.note && <div className="note">{via.note}</div>}
+      <EditBar />
+      {term && selected === null && <p className="hint">Click part of the term or a line of the diagram to select it and edit.</p>}
     </div>
   );
 }
@@ -80,7 +88,7 @@ export function Controls() {
   return (
     <div className="controls">
       <div className="buttons">
-        <button onClick={() => s.goto(0)} disabled={s.index === 0} title="Back to the start">⏮</button>
+        <button onClick={() => s.goto(0)} disabled={s.index === 0} title="Back to the start" aria-label="Back to the start">⏮</button>
         <button onClick={s.stepBack} disabled={s.index === 0} title="Step back (Alt+←)">◀ Back</button>
         <button className="primary" onClick={() => s.stepForward()} disabled={!term || (atEnd && !hasNext) || !!s.running} title="One reduction step (Alt+→)">Step ▶</button>
         <button onClick={() => s.setPlaying(!s.playing)} disabled={!term || !!s.running || (atEnd && !hasNext)} title="Play steps automatically">{s.playing ? '⏸ Pause' : '⏵ Play'}</button>
@@ -97,7 +105,7 @@ export function Controls() {
         <span className="tl-label">step {s.index} / {Math.max(0, s.history.length - 1)}</span>
       </div>
       {s.running && <div className="status running">{s.running.kind === 'run' ? `Reducing… ${s.running.steps} steps, ${s.running.size} nodes` : 'Normalizing…'}</div>}
-      {!s.running && s.message && <div className={`status ${s.message.tone}`}>{s.message.text}</div>}
+      {!s.running && s.message && <div className={`status ${s.message.tone}`} role={s.message.tone === 'error' ? 'alert' : undefined}>{s.message.text}</div>}
     </div>
   );
 }
@@ -159,7 +167,7 @@ export function Library() {
         <div className="lib-group">
           <div className="lib-title">Your definitions</div>
           {program.defs.map((d) => (
-            <button key={d.name} className={`lib-item${d.error ? ' err' : ''}`} onClick={() => insert?.(d.name + ' ')} title={d.error ?? (d.term ? printNamed(d.term).text : '')}>
+            <button key={d.name} className={`lib-item${d.error ? ' err' : ''}`} draggable onDragStart={(e) => startDefDrag(e, d.name)} onClick={() => insert?.(d.name + ' ')} title={d.error ?? (d.term ? printNamed(d.term).text : '')}>
               <span className="lib-name">{d.name}</span>{d.recursive && <span className="tag">rec</span>}{d.error && <span className="tag err">error</span>}
             </button>
           ))}
@@ -169,7 +177,7 @@ export function Library() {
         <div className="lib-group" key={g}>
           <button className="lib-title" onClick={() => setOpen((o) => ({ ...o, [g]: !o[g] }))}>{open[g] ? '▾' : '▸'} {g}</button>
           {open[g] && items.map((d) => (
-            <button key={d.name} className="lib-item" onClick={() => insert?.(d.name + ' ')} title={`${d.doc}\n\n${d.term ? printNamed(d.term).text : ''}`}>
+            <button key={d.name} className="lib-item" draggable onDragStart={(e) => startDefDrag(e, d.name)} onClick={() => insert?.(d.name + ' ')} title={`${d.doc}\n\n${d.term ? printNamed(d.term).text : ''}`}>
               <span className="lib-name">{d.name}</span><span className="lib-doc">{d.doc}</span>
             </button>
           ))}
@@ -210,6 +218,8 @@ export function Header() {
         <label className="check" title="Read λxy.xy as λx.λy.x y"><input type="checkbox" checked={s.settings.singleLetter} onChange={(e) => s.setSetting('singleLetter', e.target.checked)} /> Single-letter vars</label>
         <button onClick={() => { shareLink(s.source, s.format).then((url) => { history.replaceState(null, '', url); return navigator.clipboard?.writeText(url); }).then(() => { setShared(true); setTimeout(() => setShared(false), 1500); }).catch(() => {}); }} title="Copy a link that opens this source (compressed into the URL)">{shared ? 'Link copied' : 'Share link'}</button>
         <button onClick={() => useExport.getState().show()}>Export…</button>
+        <button onClick={() => useTutorial.getState().set({ open: !useTutorial.getState().open })} aria-pressed={useTutorial((t) => t.open)}>Tutorial</button>
+        <button onClick={() => useHelp.getState().set(true)} aria-label="Help and keyboard shortcuts" title="Help and keyboard shortcuts (?)">?</button>
         <select aria-label="Theme" value={s.settings.theme} onChange={(e) => s.setSetting('theme', e.target.value as 'system' | 'light' | 'dark')}>
           <option value="system">System theme</option><option value="light">Light</option><option value="dark">Dark</option>
         </select>

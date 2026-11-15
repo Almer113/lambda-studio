@@ -48,10 +48,13 @@ interface Props {
   redex?: Path | null;
   onHover?: (p: Path | null) => void;
   onDoubleClick?: (p: Path) => void;
+  /** Selected subterm (highlighted) and a click handler to select one. */
+  selected?: Path | null;
+  onSelect?: (p: Path | null) => void;
   display?: boolean;
 }
 
-export function TexView({ tex, className, hover = null, redex = null, onHover, onDoubleClick, display }: Props) {
+export function TexView({ tex, className, hover = null, redex = null, onHover, onDoubleClick, selected = null, onSelect, display }: Props) {
   const katex = useKatex();
   const ref = useRef<HTMLDivElement>(null);
   const html = useMemo(() => (katex && tex.length <= TEX_LIMIT ? renderTex(katex, tex, display) : null), [katex, tex, display]);
@@ -59,7 +62,7 @@ export function TexView({ tex, className, hover = null, redex = null, onHover, o
   useLayoutEffect(() => {
     const root = ref.current;
     if (!root) return;
-    root.querySelectorAll('.tx-hover, .tx-redex').forEach((e) => e.classList.remove('tx-hover', 'tx-redex'));
+    root.querySelectorAll('.tx-hover, .tx-redex, .tx-select').forEach((e) => e.classList.remove('tx-hover', 'tx-redex', 'tx-select'));
     const find = (p: Path | null): Element | null => {
       if (p === null) return null;
       for (let q = p; ; q = q.slice(0, -1)) {
@@ -70,7 +73,8 @@ export function TexView({ tex, className, hover = null, redex = null, onHover, o
     };
     find(redex)?.classList.add('tx-redex');
     find(hover)?.classList.add('tx-hover');
-  }, [html, hover, redex]);
+    find(selected)?.classList.add('tx-select');
+  }, [html, hover, redex, selected]);
 
   if (tex.length > TEX_LIMIT) return <div className="empty">Too large to typeset ({tex.length.toLocaleString()} characters of LaTeX). Switch to text.</div>;
   if (!html) return <div className="empty">Loading typesetter…</div>;
@@ -80,6 +84,7 @@ export function TexView({ tex, className, hover = null, redex = null, onHover, o
       className={`tex ${className ?? ''}`}
       onMouseMove={onHover ? (e) => onHover(pathFromElement(e.target as Element, ref.current!)) : undefined}
       onMouseLeave={onHover ? () => onHover(null) : undefined}
+      onClick={onSelect ? (e) => { if (e.detail > 1) return; const p = pathFromElement(e.target as Element, ref.current!); onSelect(p === selected ? null : p); } : undefined}
       onDoubleClick={onDoubleClick ? (e) => { const p = pathFromElement(e.target as Element, ref.current!); if (p !== null) onDoubleClick(p); } : undefined}
       dangerouslySetInnerHTML={{ __html: html }}
     />
