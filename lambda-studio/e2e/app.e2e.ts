@@ -123,3 +123,54 @@ test('stepping during a run keeps the timeline consistent', async ({ page }) => 
   expect(report.repeat).toBeNull();
   await expect(page.getByText(/normal form/i).first()).toBeVisible();
 });
+
+test('β-reduce in the edit bar is a timeline step, and stepping clears the selection', async ({ page }) => {
+  await open(page);
+  await setSource(page, '(λx.x) ((λy.y) z)');
+  await page.evaluate(() => (window as any).__store.getState().select(''));
+  await page.getByRole('toolbar', { name: 'Edit the selected subterm' }).getByRole('button', { name: 'β-reduce' }).click();
+  await expect(label(page)).toHaveText('step 1 / 1');
+  const after = await page.evaluate(() => { const s = (window as any).__store.getState(); return { source: s.source, selected: s.selected }; });
+  expect(after).toEqual({ source: '(λx.x) ((λy.y) z)', selected: null }); // the source is not rewritten
+
+  await page.evaluate(() => (window as any).__store.getState().select('a'));
+  await page.locator('body').click({ position: { x: 2, y: 2 } });
+  await page.keyboard.press('Alt+ArrowLeft');
+  await expect(label(page)).toHaveText('step 0 / 1');
+  expect(await page.evaluate(() => (window as any).__store.getState().selected)).toBeNull();
+});
+
+test('the edit bar moves focus with the arrow keys', async ({ page }) => {
+  await open(page);
+  await setSource(page, '(λx.x) y');
+  await page.evaluate(() => (window as any).__store.getState().select(''));
+  const bar = page.getByRole('toolbar', { name: 'Edit the selected subterm' });
+  await bar.getByRole('button', { name: 'β-reduce' }).focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(bar.getByRole('button', { name: 'Wrap in λ' })).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await expect(bar.getByRole('button', { name: 'β-reduce' })).toBeFocused();
+  await expect(label(page)).toHaveText('step 0 / 0'); // the arrows did not step
+});
+
+test('the examples menu loads only the item chosen', async ({ page }) => {
+  await open(page);
+  await setSource(page, 'PLUS 1 2');
+  await page.getByRole('button', { name: 'Load an example' }).click();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  expect(await page.evaluate(() => (window as any).__store.getState().source)).toBe('PLUS 1 2');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => (window as any).__store.getState().source !== 'PLUS 1 2');
+  await expect(page.getByRole('menu')).toHaveCount(0);
+});
+
+test('tablets get two columns, without the phone section tabs', async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await open(page);
+  await expect(page.locator('.tablist.tabs')).toBeHidden();
+  for (const sel of ['.editor-panel', '.diagram-panel', '.col-right', '.col-left']) await expect(page.locator(sel).first()).toBeVisible();
+  const [c, r] = await Promise.all(['.col-center', '.col-right'].map((s) => page.locator(s).boundingBox()));
+  expect(r!.x).toBeGreaterThan(c!.x + c!.width - 1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});

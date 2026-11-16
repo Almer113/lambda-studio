@@ -66,6 +66,13 @@ async function point(selector: string) {
   void (el as HTMLElement).offsetWidth;
   el.classList.add('tut-focus');
   setTimeout(() => el.classList.remove('tut-focus'), 2200);
+  // the drawer moves to the other side of the window when it would cover what it points at
+  const drawer = document.querySelector<HTMLElement>('.tutorial');
+  if (drawer && getComputedStyle(drawer).position === 'fixed' && innerWidth > 860) {
+    const a = el.getBoundingClientRect(), b = drawer.getBoundingClientRect();
+    const covers = a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    if (covers) drawer.classList.toggle('tut-left');
+  }
 }
 
 /** Closed, the tutorial subscribes to nothing: goals are checked only while it is open. */

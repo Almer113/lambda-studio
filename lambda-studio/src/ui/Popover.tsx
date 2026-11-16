@@ -2,7 +2,7 @@
 // outside, and when an item asks for it; focus returns to the button.
 
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import type { LucideIcon } from 'lucide-react';
+import { BookOpen, type LucideIcon } from 'lucide-react';
 import { IconButton } from './IconButton';
 
 export function Popover({ icon, label, text, children, align = 'left', className = '', menu = false }: {
@@ -51,11 +51,31 @@ export function Popover({ icon, label, text, children, align = 'left', className
 
 /** One action in a Popover menu. */
 export function MenuItem({ icon: Icon, children, onSelect, close, disabled, hint }: {
-  icon: LucideIcon; children: ReactNode; onSelect(): void; close(): void; disabled?: boolean; hint?: string;
+  icon?: LucideIcon; children: ReactNode; onSelect(): void; close(): void; disabled?: boolean; hint?: string;
 }) {
   return (
     <button type="button" role="menuitem" className="menu-item" disabled={disabled} onClick={() => { close(); onSelect(); }}>
-      <Icon size={16} aria-hidden /><span>{children}</span>{hint && <kbd>{hint}</kbd>}
+      {Icon && <Icon size={16} aria-hidden />}<span>{children}</span>{hint && <kbd>{hint}</kbd>}
     </button>
+  );
+}
+
+/** A labelled group of items in a Popover menu. */
+export function MenuGroup({ label, children }: { label: string; children: ReactNode }) {
+  const id = useId();
+  return (
+    <div role="group" aria-labelledby={id} className="menu-group">
+      <div id={id} className="menu-group-label" role="presentation">{label}</div>
+      {children}
+    </div>
+  );
+}
+
+/** "Examples" as a menu (a <select> that acts on change loads an item with each arrow key on Windows). */
+export function ExampleMenu<T>({ label, items, name, onPick }: { label: string; items: readonly T[]; name: (x: T) => string; onPick: (x: T) => void }) {
+  return (
+    <Popover icon={BookOpen} label={label} text="Examples" menu className="examples-menu">
+      {(close) => items.map((x) => <MenuItem key={name(x)} close={close} onSelect={() => onPick(x)}>{name(x)}</MenuItem>)}
+    </Popover>
   );
 }

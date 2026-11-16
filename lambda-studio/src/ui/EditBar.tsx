@@ -67,7 +67,7 @@ export function EditBar() {
 
   const shown = size(sub) < 400 ? printNamed(sub, { fold, avoid }).text : `(${size(sub)} nodes)`;
   return (
-    <div className="edit-bar" role="toolbar" aria-label="Edit the selected subterm">
+    <div className="edit-bar" role="toolbar" aria-label="Edit the selected subterm" onKeyDown={toolbarKeys}>
       <div className="edit-sel">
         <span className="muted">Selected:</span> <code title={describePath(selected)}>{shown}</code>
         <IconButton icon={X} className="small" label="Clear the selection" shortcut="Esc" tip="above" onClick={() => select(null)} />
@@ -90,4 +90,15 @@ export function EditBar() {
       {error && <p className="err">{error}</p>}
     </div>
   );
+}
+
+/** Arrow keys, Home and End move between the toolbar's buttons (not inside its text field). */
+function toolbarKeys(e: React.KeyboardEvent<HTMLDivElement>) {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key) || (e.target as HTMLElement).closest('input, form')) return;
+  const items = [...e.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
+  const i = items.indexOf(document.activeElement as HTMLButtonElement);
+  if (i < 0) return;
+  const j = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : e.key === 'ArrowRight' ? (i + 1) % items.length : (i - 1 + items.length) % items.length;
+  items[j].focus();
+  e.preventDefault();
 }

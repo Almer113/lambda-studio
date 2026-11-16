@@ -337,7 +337,8 @@ export function DiagramView() {
         className="diagram-wrap"
         ref={wrap}
         tabIndex={0}
-        role="img"
+        role="group"
+        aria-roledescription="interactive diagram"
         aria-label={diagram ? `Tromp diagram, ${diagram.segments.length} lines. Press an arrow key to select the term, then arrows to move through it.` : 'Tromp diagram'}
         onMouseDown={(e) => { drag.current = { x: e.clientX, y: e.clientY, tx: view.tx, ty: view.ty, moved: false }; }}
         onMouseMove={(e) => {

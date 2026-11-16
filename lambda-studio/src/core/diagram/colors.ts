@@ -51,6 +51,6 @@ export function segmentColor(s: Segment, mode: ColorMode, dark: boolean): string
 
 /** Redex highlight colours (function λ and its variables, argument, application link). */
 export const HIGHLIGHT = {
-  light: { fn: '#d6336c', arg: '#1c7ed6', link: '#f59f00' },
+  light: { fn: '#d6336c', arg: '#1c7ed6', link: '#b07500' },
   dark: { fn: '#ff6b9d', arg: '#4dabf7', link: '#ffd43b' },
 };

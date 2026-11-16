@@ -11,7 +11,7 @@ export type EditAction = 'abstract' | 'unwrap' | 'apply' | 'pass' | 'replace' | 
 export interface ActionInfo { id: EditAction; label: string; title: string; needsTerm?: boolean; needsName?: boolean }
 
 export const ACTIONS: ActionInfo[] = [
-  { id: 'beta', label: 'β-reduce', title: 'Contract this redex' },
+  { id: 'beta', label: 'β-reduce', title: 'Contract this redex (a step on the timeline, like a double-click)' },
   { id: 'abstract', label: 'Wrap in λ', title: 'M → λx.M (x not used)' },
   { id: 'unwrap', label: 'Remove λ', title: 'λx.M → M when x is not used in M' },
   { id: 'eta-expand', label: 'η-expand', title: 'M → λx.M x' },
@@ -64,10 +64,18 @@ export function applyEdit(t: Term, p: Path, action: EditAction, arg?: Term, name
  * Write an edited term back into named-notation source: keep the user's definitions, add new
  * ones, and replace the main expression with `expr`.
  */
-export function rewriteSource(source: string, expr: string, newDefs: { name: string; body: string }[] = []): string {
-  // definitions with errors are kept too: an edit must not delete the user's work
-  const defsText = definitionTexts(source).join('\n');
-  const header = source.match(/^(?:\s*(?:--|\/\/|#)[^\n]*\n)*/)?.[0].trimEnd() ?? '';
+export function rewriteSource(source: string, expr: string, newDefs: { name: string; body: string }[] = [], named = true): string {
+  // definitions with errors are kept too: an edit must not delete the user's work. A source in
+  // another notation has no named definitions: only its leading comments are kept (as `--` lines,
+  // without a `-- 0-based` marker, which would mean something else in named notation).
+  const defsText = named ? definitionTexts(source).join('\n') : '';
+  let header = source.match(/^(?:\s*(?:--|\/\/|#)[^\n]*\n)*/)?.[0].trimEnd() ?? '';
+  if (!named) {
+    header = header.split('\n')
+      .filter((l) => l.trim() !== '' && !/^\s*(--|\/\/|#)\s*[01]-based\b/i.test(l))
+      .map((l) => l.replace(/^\s*(--|\/\/|#)/, '--'))
+      .join('\n');
+  }
   const parts = [header, defsText, ...newDefs.map((d) => `${d.name} = ${d.body}`), expr].filter((x) => x.trim() !== '');
   return parts.join('\n');
 }

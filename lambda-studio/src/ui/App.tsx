@@ -70,7 +70,7 @@ export function App() {
   const [tab, setTabState] = useState<MobileTab>('diagram');
   const preview = useStore((s) => s.settings.sourcePreview);
   const setSetting = useStore((s) => s.setSetting);
-  const phone = useMedia('(max-width: 860px)');
+  const phone = useMedia('(max-width: 639px)');
   const sideActive = !phone || tab === 'tools' || tab === 'convert';
   const setTab = (t: MobileTab) => {
     setTabState(t);

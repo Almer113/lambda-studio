@@ -3,6 +3,8 @@
 
 import { useStore } from './store';
 
+const COARSE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+
 /** The Source panel's header hint, or the first error (else warning) in the source. */
 export function SourceStatus() {
   const program = useStore((s) => s.program);
@@ -10,7 +12,7 @@ export function SourceStatus() {
   const reveal = useStore((s) => s.revealSource);
   const errors = program.diagnostics.filter((d) => d.severity === 'error');
   const list = errors.length ? errors : program.diagnostics.filter((d) => d.severity === 'warning');
-  if (list.length === 0) return <span className="sub">Type <kbd>\</kbd> for λ · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs</span>;
+  if (list.length === 0) return COARSE ? <span className="sub">λ and brackets: the bar under the source</span> : <span className="sub">Type <kbd>\</kbd> for λ · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs</span>;
   const d = list[0];
   const from = Math.min(d.from, source.length);
   const line = source.slice(0, from).split('\n').length;

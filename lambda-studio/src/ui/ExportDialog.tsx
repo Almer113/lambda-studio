@@ -15,7 +15,7 @@ import { useFolder } from './panels';
 import { planVideo, encodeGif, encodeWebm, webmSupported, type VideoOptions } from './video';
 import { download, workspaceJSON, openWorkspace, saveWorkspace } from './workspace';
 import { NumberField } from './NumberField';
-import { X, Download, FolderOpen, Save } from 'lucide-react';
+import { X, Download, FolderOpen, Save, FastForward, StepForward } from 'lucide-react';
 import { IconButton, CopyButton } from './IconButton';
 
 type Tab = 'diagram' | 'animation' | 'text' | 'workspace';
@@ -43,11 +43,11 @@ export function ExportDialog() {
     if (!open && d.open) d.close();
   }, [open]);
   return (
-    <dialog ref={ref} className="export-dialog" onClose={hide} onClick={(e) => { if (e.target === ref.current) hide(); }}>
+    <dialog ref={ref} className="export-dialog" aria-labelledby="export-title" onClose={hide} onClick={(e) => { if (e.target === ref.current) hide(); }}>
       {open && (
         <div className="export-body">
           <div className="export-head">
-            <h2>Export</h2>
+            <h2 id="export-title">Export</h2>
             <nav className="export-tabs" role="tablist">
               {TABS.map((t) => <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'on' : ''} onClick={() => useExport.getState().show(t.id)}>{t.name}</button>)}
             </nav>
@@ -168,6 +168,27 @@ function DiagramExport() {
 }
 
 // --- animation ---------------------------------------------------------------
+/** The animation shows recorded steps: with none yet, offer to record them from here. */
+function RecordSteps() {
+  const term = useStore(currentTerm);
+  const running = useStore((s) => s.running);
+  const message = useStore((s) => s.message);
+  const step = (n: number) => { const st = useStore.getState(); for (let k = 0; k < n && st.stepForward(); k++) { /* one step at a time */ } };
+  return (
+    <div className="export-pane">
+      <p className="muted">The animation shows the recorded reduction, and there are no steps yet.</p>
+      {!term ? <p className="muted">Type a term in the source first.</p> : (
+        <div className="export-options">
+          <IconButton icon={FastForward} text="Run to normal form" label="Reduce to normal form, recording the steps" disabled={!!running} onClick={() => useStore.getState().runToNormal()} />
+          <IconButton icon={StepForward} text="Take 10 steps" label="Take up to 10 steps" disabled={!!running} onClick={() => step(10)} />
+          {running && <span className="muted" role="status">Reducing… {running.kind === 'run' ? `${running.steps} steps` : ''}</span>}
+        </div>
+      )}
+      {message && !running && <p className={message.tone === 'error' ? 'err' : 'muted'}>{message.text}</p>}
+    </div>
+  );
+}
+
 function AnimationExport() {
   const history = useStore((s) => s.history);
   const index = useStore((s) => s.index);
@@ -216,7 +237,7 @@ function AnimationExport() {
     } finally { setBusy(null); }
   };
 
-  if (history.length < 2) return <p className="muted">Take some steps first (Step, Play or Run): the animation shows the recorded reduction.</p>;
+  if (history.length < 2) return <RecordSteps />;
   return (
     <div className="export-pane">
       <div className="export-options">

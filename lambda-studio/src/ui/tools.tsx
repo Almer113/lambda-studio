@@ -24,6 +24,7 @@ import { NumberField } from './NumberField';
 import { FileInput, TextCursorInput, ListPlus, Dices, Sigma, Table, Hash, Equal, Boxes } from 'lucide-react';
 import { TabList, TabPanel, type TabDef } from './Tabs';
 import { insertIntoSource } from './Toast';
+import { ExampleMenu } from './Popover';
 import { IconButton, CopyButton } from './IconButton';
 
 const TABS: TabDef<ToolsTab>[] = [
@@ -195,10 +196,7 @@ function ExpressionTool() {
     <div className="tool">
       <div className="tool-row">
         <label className="check" title="Type with a WYSIWYG math editor (fractions, powers, ∧ ∨ ¬ …)"><input type="checkbox" checked={math} onChange={(e) => setSetting('mathEditor', e.target.checked)} /> Math editor</label>
-        <select aria-label="Expression examples" value="" onChange={(e) => { const v = e.target.value; if (!v) return; setText(v); setLatex(toLatexGuess(v)); }}>
-          <option value="">Examples…</option>
-          {EXPR_EXAMPLES.map((x) => <option key={x} value={x}>{x}</option>)}
-        </select>
+        <ExampleMenu label="Expression examples" items={EXPR_EXAMPLES} name={(x) => x} onPick={(v) => { setText(v); setLatex(toLatexGuess(v)); }} />
         <span className="muted">+ − × ÷ mod ^ ! · &lt; ≤ = ≠ · ∧ ∨ ¬ ⊕ → ↔ (or and/or/not, &amp;&amp; || !)</span>
       </div>
       {math
@@ -387,10 +385,7 @@ function LawsTool() {
     <div className="tool">
       <p className="muted">Normalizes both sides and compares the normal forms, up to η. Different βη-normal forms mean the terms are really different (Böhm's theorem), even if they agree on every numeral.</p>
       <div className="tool-row">
-        <select aria-label="Example equations" value="" onChange={(e) => { const l = LAWS[Number(e.target.value)]; if (!l) return; setLeft(l.left); setRight(l.right); setNote(l.note); check(l.left, l.right); }}>
-          <option value="">Examples…</option>
-          {LAWS.map((l, i) => <option key={l.name} value={i}>{l.name}</option>)}
-        </select>
+        <ExampleMenu label="Example equations" items={LAWS} name={(l) => l.name} onPick={(l) => { setLeft(l.left); setRight(l.right); setNote(l.note); check(l.left, l.right); }} />
       </div>
       <div className="law-row">
         <input className="tool-input" value={left} onChange={(e) => { setLeft(e.target.value); setNote(undefined); }} aria-label="Left side" spellCheck={false} />
@@ -432,10 +427,7 @@ function DataTool() {
     <div className="tool">
       <p className="muted">Write Haskell-style declarations. Constructors become λ-terms; the generated SIZE function shows how recursion works in each encoding.</p>
       <div className="tool-row">
-        <select aria-label="Data type examples" value="" onChange={(e) => e.target.value && setSrc(e.target.value)}>
-          <option value="">Examples…</option>
-          {DATA_EXAMPLES.map((x) => <option key={x.name} value={x.src}>{x.name}</option>)}
-        </select>
+        <ExampleMenu label="Data type examples" items={DATA_EXAMPLES} name={(x) => x.name} onPick={(x) => setSrc(x.src)} />
         <span className="seg">
           {ENCODINGS.map((e) => <button key={e.id} className={enc === e.id ? 'on' : ''} onClick={() => setEnc(e.id)} title={e.blurb}>{e.name}</button>)}
         </span>

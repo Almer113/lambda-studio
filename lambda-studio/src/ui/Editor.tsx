@@ -185,5 +185,26 @@ export function Editor() {
     v.dispatch({ effects: setMark.of(span && span.to <= len ? span : null) });
   }, [hover, index, program]);
 
-  return <div className="editor" ref={host} />;
+  /** Type a symbol at the cursor (touch screens have no easy λ, dot or brackets). */
+  const typeSymbol = (s: string) => {
+    const v = view.current;
+    if (!v) return;
+    const { from, to } = v.state.selection.main;
+    const text = s === '( )' ? '()' : s;
+    v.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + (s === '( )' ? 1 : text.length) }, userEvent: 'input.type' });
+    v.focus();
+  };
+  return (
+    <>
+      <div className="editor" ref={host} />
+      <div className="symbol-bar" role="toolbar" aria-label="Type a symbol">
+        {SYMBOLS.map(([s, name]) => (
+          // keep the editor focused (and the on-screen keyboard up) while tapping
+          <button key={s} type="button" aria-label={name} onPointerDown={(e) => e.preventDefault()} onClick={() => typeSymbol(s)}>{s}</button>
+        ))}
+      </div>
+    </>
+  );
 }
+
+const SYMBOLS: [string, string][] = [['λ', 'lambda'], ['.', 'dot'], ['( )', 'brackets'], ['(', 'open bracket'], [')', 'close bracket'], ['=', 'equals'], ['_', 'underscore']];

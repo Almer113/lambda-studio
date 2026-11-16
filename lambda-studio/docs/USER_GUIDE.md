@@ -44,7 +44,8 @@ Paste a term in another notation and the input format is detected (the Input men
 - **Step** contracts one redex chosen by the **Strategy** (normal order by default). The next redex is highlighted: function λ and its variables in pink, argument in blue, the application in yellow.
 - **Double-click** a redex in the text, the TeX view or the diagram to contract that one instead.
 - **Play** steps automatically at the speed set by the slider. **Run** reduces to normal form in the background, recording up to 2000 steps; **Normalize** uses a much faster engine with sharing and records only the result.
-- The **timeline** goes back to any earlier step. Editing or stepping from an earlier step starts a new branch.
+- The **timeline** goes back to any earlier step. From there, Step and Play move forward along the recorded steps; contracting a redex of your choice (double-click, or β-reduce in the edit bar) starts a new branch, and Run or Normalize continue from that step and replace what came after it. An edit rewrites the source, so it starts a new timeline.
+- Stepping clears the selection (it pointed into the previous term).
 - Tick **η** to also contract η-redexes `λx.M x → M`.
 - Limits (steps, term size) stop runaway terms, and loops like Ω are detected. When Run reaches a limit, the status bar offers to raise it and continue; the limits are also in **Settings**.
 
@@ -64,7 +65,7 @@ Select a subterm by clicking it in the diagram or the current term (or press an 
 
 | Action | Effect |
 |---|---|
-| β-reduce | Contract the selected redex |
+| β-reduce | Contract the selected redex: a step on the timeline, like a double-click |
 | Wrap in λ / Remove λ | `M → λx.M`, and back when x is unused |
 | η-expand / η-reduce | `M → λx.M x`, and back |
 | Apply to… / Pass to… | `M → M N` / `M → F M` with a term you type |
@@ -72,7 +73,7 @@ Select a subterm by clicking it in the diagram or the current term (or press an 
 | Delete | Drop one side of an application |
 | Name it… | Turn the subterm into a definition and use its name |
 
-Dragging a library name onto a diagram line replaces that subterm with the definition. Clicking a library name inserts it at the cursor in the source; before you have clicked into the editor, it goes at the end of the main expression. Every edit rewrites the source (your definitions are kept), so the text and the diagram never disagree.
+Dragging a library name onto a diagram line replaces that subterm with the definition. Clicking a library name inserts it at the cursor in the source; before you have clicked into the editor, it goes at the end of the main expression. Every other edit rewrites the source, so the text and the diagram never disagree. In named notation your definitions and leading comments are kept, and only names you already use are folded back in; a source in another notation (BLC, SKI, de Bruijn…) becomes named notation, keeping its leading comments.
 
 ## Tools
 

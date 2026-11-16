@@ -3,7 +3,7 @@
 
 import {
   File as FileIcon, FilePlus, FolderOpen, Save, Share2, Download, Settings as SettingsIcon, GraduationCap, CircleHelp,
-  Sun, Moon, Monitor, Ellipsis, RotateCcw, Check,
+  Sun, Moon, Monitor, Ellipsis, RotateCcw, Check, BookOpen,
 } from 'lucide-react';
 import { useStore, shareLink, DEFAULT_SETTINGS, type Theme } from './store';
 import { useExport } from './ExportDialog';
@@ -13,7 +13,7 @@ import { EXAMPLES, EXAMPLE_GROUPS } from '../core/prelude';
 import { useTutorial } from './Tutorial';
 import { useHelp } from './Help';
 import { IconButton } from './IconButton';
-import { Popover, MenuItem } from './Popover';
+import { Popover, MenuItem, MenuGroup } from './Popover';
 import { NumberField } from './NumberField';
 import { pickWorkspace, saveWorkspace } from './workspace';
 import { useToast } from './Toast';
@@ -63,20 +63,20 @@ function FileMenu() {
 }
 
 function ExamplesSelect() {
+  // a menu, not a <select>: on Windows a select acts on every arrow-key press, loading each example
   return (
-    <select aria-label="Load an example" value="" onChange={(e) => {
-      const ex = EXAMPLES[Number(e.target.value)];
-      if (!ex) return;
-      useStore.getState().setSource(ex.src, ex.format ?? 'auto');
-      if (ex.note) useStore.setState({ message: { text: `${ex.name}: ${ex.note}`, tone: 'info' } });
-    }}>
-      <option value="">Examples…</option>
-      {EXAMPLE_GROUPS.map((g) => (
-        <optgroup key={g} label={g}>
-          {EXAMPLES.map((ex, i) => (ex.group === g ? <option key={ex.name} value={i}>{ex.name}</option> : null))}
-        </optgroup>
+    <Popover icon={BookOpen} label="Load an example" text="Examples" menu className="examples-menu">
+      {(close) => EXAMPLE_GROUPS.map((g) => (
+        <MenuGroup key={g} label={g}>
+          {EXAMPLES.map((ex) => (ex.group === g ? (
+            <MenuItem key={ex.name} close={close} onSelect={() => {
+              useStore.getState().setSource(ex.src, ex.format ?? 'auto');
+              if (ex.note) useStore.setState({ message: { text: `${ex.name}: ${ex.note}`, tone: 'info' } });
+            }}>{ex.name}</MenuItem>
+          ) : null))}
+        </MenuGroup>
       ))}
-    </select>
+    </Popover>
   );
 }
 

@@ -131,4 +131,23 @@ describe('leftovers', () => {
     expect(printNamed(two, { fold: sourceFolder('λg.g (λf x.f (f x))', fold) }).text).not.toContain('2');
     expect(printNamed(two, { fold: sourceFolder('SUCC 1', fold) }).text).toContain('2');
   });
+  test('an edit of a non-named source keeps its leading comments, not a 0-based marker', () => {
+    expect(rewriteSource('# my K\n// note\n-- 0-based\nλλ1', 'λx y.x', [], false)).toBe('-- my K\n-- note\nλx y.x');
+    expect(rewriteSource('0000110', 'λx.x', [], false)).toBe('λx.x');
+  });
+  test('combinator input folds to combinator names', () => {
+    const show = (s: string, f: 'ski' | 'named') => {
+      const p = parseProgram(s, f);
+      return printNamed(p.term!, { fold: makeFolder(p.foldTable, { numerals: true, zeroAs: '0' }) }).text;
+    };
+    expect(show('S K K', 'ski')).toBe('S K K');
+    expect(show('K', 'ski')).toBe('K');
+    expect(show('λx y.x', 'named')).toBe('TRUE');
+  });
+  test('the printer reports where names stand for longer terms', () => {
+    const p = parseProgram('λg.g I (λf x.f (f x))');
+    const out = printNamed(p.term!, { fold: makeFolder(p.foldTable, { numerals: true, zeroAs: '0' }) });
+    expect(out.text).toBe('λg.g I 2');
+    expect(out.folds!.map((f) => out.text.slice(f.from, f.to))).toEqual(['I', '2']);
+  });
 });

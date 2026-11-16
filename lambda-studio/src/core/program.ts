@@ -85,6 +85,22 @@ function preludeFoldTable(): FoldTable {
   return t;
 }
 
+let combinatorFold: FoldTable | null = null;
+/**
+ * For combinator input (SKI, Unlambda, Iota, …): combinator names come first, so K reads as K, not
+ * TRUE, and S K K as S K K; then the rest of the library as usual.
+ */
+function combinatorFoldTable(): FoldTable {
+  if (combinatorFold) return combinatorFold;
+  const defs = preludeDefs();
+  const t = new FoldTable();
+  for (const e of PRELUDE) if (e.group === 'Combinators' && e.name !== 'Ω') t.add(e.name, defs.get(e.name)!.term!);
+  for (const e of PRELUDE) if (e.fold) t.add(e.name, defs.get(e.name)!.term!);
+  combinatorFold = t;
+  return t;
+}
+const CL_FORMATS = new Set<FormatId>(['ski', 'unlambda', 'iota', 'jot', 'bcl', 'lazyk']);
+
 export function preludeInfo(): DefInfo[] {
   const defs = preludeDefs();
   return PRELUDE.map((e) => ({ name: e.name, origin: 'prelude' as const, term: defs.get(e.name)!.term ?? null, doc: e.doc, group: e.group, recursive: defs.get(e.name)!.recursive }));
@@ -136,7 +152,7 @@ export function parseProgram(src: string, format: FormatId | 'auto' = 'auto', op
   const fmt: FormatId = format === 'auto' ? detectFormat(src, opts.defaultDeBruijnBase ?? 1) : format;
   const detected = format === 'auto';
   const spans = new Map<Path, Span>();
-  const base: Program = { term: null, format: fmt, detected, diagnostics: [], spans, defs: [], foldTable: preludeFoldTable() };
+  const base: Program = { term: null, format: fmt, detected, diagnostics: [], spans, defs: [], foldTable: CL_FORMATS.has(fmt) ? combinatorFoldTable() : preludeFoldTable() };
   const fail = (e: unknown): Program => {
     if (e instanceof ParseError || e instanceof ParseFail || e instanceof CodeParseError) return { ...base, diagnostics: [{ from: e.from, to: Math.max(e.to, e.from), message: e.message, severity: 'error' }] };
     return { ...base, diagnostics: [{ from: 0, to: src.length, message: String(e), severity: 'error' }] };

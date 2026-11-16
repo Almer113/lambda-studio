@@ -447,7 +447,12 @@ export interface PrintOptions {
   avoid?: ReadonlySet<string>;
 }
 
-export interface Printed { text: string; spans: { path: Path; from: number; to: number }[] }
+export interface Printed {
+  text: string;
+  spans: { path: Path; from: number; to: number }[];
+  /** where a subterm was shown as a name or numeral (by `fold`) */
+  folds?: { path: Path; from: number; to: number }[];
+}
 
 const DEFAULT_NAMES = ['x', 'y', 'z', 'w', 'v', 'u', 't', 's', 'r', 'q'];
 
@@ -459,6 +464,7 @@ export function printNamed(t: Term, opts: PrintOptions = {}): Printed {
   collectFreeNames(t, avoid, (k) => `_${k}`);
   let out = '';
   const spans: Printed['spans'] = [];
+  const folds: NonNullable<Printed['folds']> = [];
   const ctx = new NameScope((n) => avoid.has(n) || /^[0-9]/.test(n) || n === 'let' || n === 'in');
 
   const pick = (hint: string | undefined): string =>
@@ -476,6 +482,7 @@ export function printNamed(t: Term, opts: PrintOptions = {}): Printed {
     if (folded !== null) {
       out += folded;
       finish();
+      folds.push({ path, from: start, to: out.length });
     } else if (n.tag === 'var') {
       out += n.i < ctx.depth ? ctx.at(n.i) : `_${n.i - ctx.depth}`;
       finish();
@@ -519,5 +526,5 @@ export function printNamed(t: Term, opts: PrintOptions = {}): Printed {
   };
   emit(t, '', 'top');
   while (tasks.length) tasks.pop()!();
-  return { text: out, spans };
+  return { text: out, spans, folds };
 }

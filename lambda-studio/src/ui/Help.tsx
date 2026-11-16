@@ -96,7 +96,8 @@ export function Announcer() {
       setText(`Selected ${kind}: ${size(sub) < 60 ? printNamed(sub).text : `${size(sub)} nodes`}`);
     } catch { /* stale */ }
   }, [term, selected]);
-  useEffect(() => { if (message) setText(message.text); }, [message]);
+  // errors are announced by the status line itself (role="alert"): saying them here too repeats them
+  useEffect(() => { if (message && message.tone !== 'error') setText(message.text); }, [message]);
   return <div className="sr-only" aria-live="polite" role="status">{text}</div>;
 }
 

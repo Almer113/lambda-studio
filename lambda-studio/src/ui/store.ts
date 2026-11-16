@@ -234,7 +234,8 @@ export const useStore = create<State>((set, get) => {
   const pushEntries = (entries: Entry[], base?: { history: Entry[]; index: number }) => {
     const { history, index } = base ?? get();
     const h = history.slice(0, index + 1).concat(entries);
-    set({ history: h, index: h.length - 1 });
+    // a selection is a path into the term it was made in: it would point at something else now
+    set({ history: h, index: h.length - 1, selected: null });
   };
   const failed = (why: string) => set({ running: null, message: { text: `The evaluator stopped unexpectedly (${why}).`, tone: 'error' } });
   /** Changes that make a running job's result meaningless stop it first. */
@@ -280,6 +281,14 @@ export const useStore = create<State>((set, get) => {
       const st = get();
       const term = st.history[st.index]?.term;
       if (!term) return 'No term';
+      // β-reduction is a step like any other: it goes on the timeline (a branch if made at an
+      // earlier step), the same as a double-click, instead of rewriting the source
+      if (action === 'beta') {
+        if (st.running) return 'Wait for the run to finish';
+        if (redexKindAt(term, p, st.settings.eta) === null) return 'This is not a redex';
+        st.reduceAt(p);
+        return null;
+      }
       const next = applyEdit(term, p, action, arg, name);
       if (!next) return 'This action does not apply here';
       // The rewritten source folds only names (and numerals) the source already uses: folding in
@@ -288,7 +297,7 @@ export const useStore = create<State>((set, get) => {
       const avoid = new Set([...st.program.foldTable.names, ...(name ? [name] : [])]);
       const newDefs = action === 'fold' && name ? [{ name, body: printNamed(getAt(term, p), { fold, avoid }).text }] : [];
       const named = st.program.format === 'named' || st.program.format === 'haskell';
-      const src = rewriteSource(named ? st.source : '', printNamed(next, { fold, avoid }).text, newDefs);
+      const src = rewriteSource(st.source, printNamed(next, { fold, avoid }).text, newDefs, named);
       if (st.running) st.stop();
       // The rewritten source is named notation. Keep a pinned Named/Haskell format; with 'auto',
       // keep it only if the new text is detected as named (a bare numeral like 1000 is not BLC).
@@ -307,7 +316,7 @@ export const useStore = create<State>((set, get) => {
     stepForward() {
       const { history, index, settings, running } = get();
       if (running) return false;
-      if (index < history.length - 1) { set({ index: index + 1 }); return true; }
+      if (index < history.length - 1) { set({ index: index + 1, selected: null }); return true; }
       const cur = history[index]?.term;
       if (!cur) return false;
       const path = findRedex(cur, settings);
@@ -317,8 +326,12 @@ export const useStore = create<State>((set, get) => {
       set({ message: null });
       return true;
     },
-    stepBack() { const { index, running } = get(); if (index > 0 && !running) set({ index: index - 1, message: null }); },
-    goto(i) { const { history, running } = get(); if (!running) set({ index: Math.max(0, Math.min(history.length - 1, i)), message: null }); },
+    stepBack() { const { index, running } = get(); if (index > 0 && !running) set({ index: index - 1, message: null, selected: null }); },
+    goto(i) {
+      const { history, running, index } = get();
+      const to = Math.max(0, Math.min(history.length - 1, i));
+      if (!running && to !== index) set({ index: to, message: null, selected: null });
+    },
     reduceAt(path) {
       const { history, index, settings, running } = get();
       const cur = history[index]?.term;
