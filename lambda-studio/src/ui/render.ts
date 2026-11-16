@@ -9,7 +9,7 @@ import { type Rect, type FrameRect, buildMorph, morphFrame, type Morph } from '.
 export interface View { scale: number; tx: number; ty: number }
 
 /** View that fits a diagram into a W×H box, centred (whole-pixel scale when ≥ 2). */
-export function fitView(d: Diagram, W: number, H: number, pad = 4, maxScale = 40): View {
+export function fitView(d: Diagram, W: number, H: number, pad = 4, maxScale = 16): View {
   const dw = d.width + pad, dh = d.height - d.top + pad;
   let scale = Math.max(0.02, Math.min(maxScale, Math.min(W / dw, H / dh)));
   if (scale >= 2) scale = Math.floor(scale);

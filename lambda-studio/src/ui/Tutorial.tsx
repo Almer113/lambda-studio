@@ -4,10 +4,19 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { create } from 'zustand';
 import { useStore } from './store';
 import { LESSONS } from './lessons';
+import { X, ChevronLeft, ChevronRight, Check } from 'lucide-react';
+import { IconButton } from './IconButton';
 
 const KEY = 'lambda-studio:tutorial';
 interface TutState { open: boolean; lesson: number; step: number; done: Record<string, boolean> }
-const saved = ((): Partial<TutState> => { try { return JSON.parse(localStorage.getItem(KEY) ?? '{}'); } catch { return {}; } })();
+const saved = ((): Partial<TutState> => {
+  try {
+    const raw = localStorage.getItem(KEY);
+    // first visit (and not arriving through a share link): open the tutorial
+    if (raw === null) return { open: !/^#[sz]=/.test(location.hash) };
+    return JSON.parse(raw);
+  } catch { return {}; }
+})();
 
 export const useTutorial = create<TutState & { set(p: Partial<TutState>): void }>((set, get) => ({
   open: false, lesson: 0, step: 0, done: {}, ...saved,
@@ -62,7 +71,8 @@ function TutorialDrawer() {
 
   const load = () => {
     if (step.load !== undefined) st.setSource(step.load, 'auto');
-    if (step.tool) st.setSetting('toolsTab', step.tool);
+    if (step.tool) { st.setSetting('toolsTab', step.tool); st.setSetting('sideTab', 'tools'); }
+    else if (step.focus?.includes('col-right') || step.focus?.includes('conversions')) st.setSetting('sideTab', 'notations');
     if (step.focus) setTimeout(() => point(step.focus!), 50);
     setLoadedKey(key);
   };
@@ -79,7 +89,7 @@ function TutorialDrawer() {
         <select aria-label="Lesson" value={t.lesson} onChange={(e) => go(Number(e.target.value), 0)}>
           {LESSONS.map((l, i) => <option key={l.id} value={i}>{lessonDone(i) ? '✓ ' : ''}{l.title}</option>)}
         </select>
-        <button className="close" onClick={() => t.set({ open: false })} aria-label="Close tutorial">✕</button>
+        <IconButton icon={X} className="close" label="Close the tutorial" onClick={() => t.set({ open: false })} />
       </div>
       <div className="tut-progress" aria-hidden>{lesson.steps.map((_, k) => <span key={k} className={k === t.step ? 'on' : k < t.step ? 'past' : ''} />)}</div>
       <div className="tut-body">
@@ -95,9 +105,9 @@ function TutorialDrawer() {
         )}
       </div>
       <div className="tut-nav">
-        <button onClick={prev} disabled={t.lesson === 0 && t.step === 0}>◀ Back</button>
+        <IconButton icon={ChevronLeft} text="Back" label="Previous step" tip="above" onClick={prev} disabled={t.lesson === 0 && t.step === 0} />
         <span className="muted">{t.step + 1} / {lesson.steps.length}</span>
-        <button className={reached || !step.goal ? 'primary' : ''} onClick={next}>{last ? 'Finish' : 'Next ▶'}</button>
+        <IconButton icon={last ? Check : ChevronRight} className={`icon-after ${reached || !step.goal ? 'primary' : ''}`} text={last ? 'Finish' : 'Next'} label={last ? 'Finish the tutorial' : 'Next step'} tip="above" onClick={next} />
       </div>
     </aside>
   );

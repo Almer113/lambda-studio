@@ -8,6 +8,8 @@ import { ACTIONS, applicable, freshName, type EditAction } from '../core/edit';
 import { getAt, size, type Path } from '../core/term';
 import { parseProgram } from '../core/program';
 import { printNamed } from '../core/formats/named';
+import { X, CornerLeftUp } from 'lucide-react';
+import { IconButton } from './IconButton';
 
 export function describePath(p: Path): string {
   if (p === '') return 'the whole term';
@@ -68,13 +70,13 @@ export function EditBar() {
     <div className="edit-bar" role="toolbar" aria-label="Edit the selected subterm">
       <div className="edit-sel">
         <span className="muted">Selected:</span> <code title={describePath(selected)}>{shown}</code>
-        <button className="small" onClick={() => select(null)} aria-label="Clear selection" title="Clear selection (Esc)">✕</button>
+        <IconButton icon={X} className="small" label="Clear the selection" shortcut="Esc" tip="above" onClick={() => select(null)} />
       </div>
       <div className="edit-actions">
         {ACTIONS.map((a) => (
           <button key={a.id} className={pending === a.id ? 'on' : ''} disabled={!ok.has(a.id)} title={a.title} onClick={() => start(a.id)}>{a.label}</button>
         ))}
-        {selected !== '' && <button onClick={() => select(selected.slice(0, -1))} title="Select the enclosing term (↑)">Parent</button>}
+        {selected !== '' && <IconButton icon={CornerLeftUp} text="Parent" label="Select the enclosing term" shortcut="↑" tip="above" onClick={() => select(selected.slice(0, -1))} />}
       </div>
       {pending && (
         <form className="edit-input" onSubmit={(e) => { e.preventDefault(); finish(); }}>

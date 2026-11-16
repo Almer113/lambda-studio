@@ -47,7 +47,10 @@ export interface Settings {
   toolsTab: ToolsTab;
   /** Use the WYSIWYG math editor for expressions. */
   mathEditor: boolean;
+  /** Which of Notations / Tools the right-hand panel shows. */
+  sideTab: SideTab;
 }
+export type SideTab = 'notations' | 'tools';
 export type ToolsTab = 'expr' | 'truth' | 'table' | 'laws' | 'data' | 'generate';
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -57,9 +60,11 @@ export const DEFAULT_SETTINGS: Settings = {
   tex: { current: true, named: true, expanded: true, debruijn0: true, debruijn1: true },
   sourcePreview: true,
   clAlgorithm: 'turner',
-  openGroups: { lambda: true, combinators: true, code: true, bits: true },
+  // combinators and code are costly for big terms: closed until asked for
+  openGroups: { lambda: true, combinators: false, code: false, bits: true },
   toolsTab: 'expr',
   mathEditor: false,
+  sideTab: 'notations',
 };
 
 const ENUMS: Partial<Record<keyof Settings, readonly string[]>> = {
@@ -70,6 +75,7 @@ const ENUMS: Partial<Record<keyof Settings, readonly string[]>> = {
   theme: ['system', 'light', 'dark'],
   clAlgorithm: ALGORITHMS.map((x) => x.id),
   toolsTab: ['expr', 'truth', 'table', 'laws', 'data', 'generate'],
+  sideTab: ['notations', 'tools'],
 };
 const RANGES: Partial<Record<keyof Settings, [number, number]>> = {
   maxSteps: [1, 10_000_000], maxSize: [100, 50_000_000], playSpeed: [0.25, 60],
@@ -264,7 +270,11 @@ export const useStore = create<State>((set, get) => {
       set({ settings, ...reset(compile(get().source, get().format, settings)) });
       save(get());
     },
-    setHover(p, from) { set({ hover: p, hoverSource: p === null ? null : from ?? null }); },
+    setHover(p, from) {
+      const hoverSource = p === null ? null : from ?? null;
+      if (get().hover === p && get().hoverSource === hoverSource) return; // mouse moves within one part
+      set({ hover: p, hoverSource });
+    },
     select(p) { set({ selected: p }); },
     edit(action, p, arg, name) {
       const st = get();
@@ -342,9 +352,13 @@ export const useStore = create<State>((set, get) => {
             entries.push({ term: m.term, via: { kind: 'run', note: `${m.steps - entries.length} more steps (not recorded)` } });
           }
           pushEntries(entries, base);
-          const tone = m.status === 'normal' ? 'info' : m.status === 'cycle' ? 'warn' : 'error';
+          const limit = m.status === 'step-limit' || m.status === 'size-limit';
+          const tone = m.status === 'normal' ? 'info' : m.status === 'cycle' || limit ? 'warn' : 'error';
           const text = m.status === 'normal' ? `Normal form after ${m.steps} step${m.steps === 1 ? '' : 's'} (largest term: ${m.maxSizeSeen} nodes).` : m.message ?? m.status;
-          set({ running: null, message: { text, tone } });
+          // a limit is not a failure: offer to raise it and carry on from where the run stopped
+          const key = m.status === 'step-limit' ? 'maxSteps' : 'maxSize';
+          const action = limit ? { label: `Raise the limit to ${(settings[key] * 10).toLocaleString('en')} and continue`, run: () => { const s = useStore.getState(); s.setSetting(key, Math.min(key === 'maxSteps' ? 10_000_000 : 50_000_000, s.settings[key] * 10)); s.runToNormal(); } } : undefined;
+          set({ running: null, message: { text, tone, action } });
         }
       }, failed);
       const req: WorkerRequest = { id, type: 'run', term: cur, opts: { strategy: settings.strategy, eta: settings.eta }, maxSteps: settings.maxSteps, maxSize: settings.maxSize, record: 2000 };
@@ -379,6 +393,23 @@ export const useStore = create<State>((set, get) => {
 });
 
 export const currentTerm = (s: State): Term | null => s.history[s.index]?.term ?? null;
+
+/** The next redex of a term under a strategy, computed once per term (several panels ask). */
+const redexCache = new WeakMap<Term, Map<string, Path | null>>();
+export function nextRedex(t: Term, strategy: Strategy, eta: boolean): Path | null {
+  let m = redexCache.get(t);
+  if (!m) redexCache.set(t, (m = new Map()));
+  const key = `${strategy}|${eta}`;
+  if (!m.has(key)) m.set(key, findRedex(t, { strategy, eta }));
+  return m.get(key)!;
+}
+/** Hook: the next redex of the current term (null when there is none). */
+export function useNextRedex(): Path | null {
+  const term = useStore(currentTerm);
+  const strategy = useStore((s) => s.settings.strategy);
+  const eta = useStore((s) => s.settings.eta);
+  return term ? nextRedex(term, strategy, eta) : null;
+}
 
 // Share links (#z=…, and the older #s=…) open once. The hash is removed at once, so reloading the
 // page later does not bring the shared snapshot back over newer work, and the source the link

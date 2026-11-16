@@ -31,7 +31,7 @@ export const LESSONS: Lesson[] = [
   },
   {
     id: 'beta', title: '2. β-reduction', steps: [
-      { text: 'Computation is one rule, **β-reduction**: `(λx.M) N` → M with N substituted for x. The part `(λx.M) N` is a **redex**.\n\nPress **Step ▶** (or Alt+→). The next redex is highlighted: the function in pink, the argument in blue.', load: '(λx.x x) (λy.y)', focus: '.controls', goal: { text: 'Take a step', check: (s) => s.history.length > 1 } },
+      { text: 'Computation is one rule, **β-reduction**: `(λx.M) N` → M with N substituted for x. The part `(λx.M) N` is a **redex**.\n\nPress **Step** (or Alt+→). The next redex is highlighted: the function in pink, the argument in blue.', load: '(λx.x x) (λy.y)', focus: '.controls', goal: { text: 'Take a step', check: (s) => s.history.length > 1 } },
       { text: 'Keep stepping until no redex is left: the term is then in **normal form**. You can also double-click any redex (in the text or the diagram) to reduce that one instead, and drag the timeline to go back.', goal: { text: 'Reach the normal form', check: isNormal } },
     ],
   },
@@ -43,14 +43,14 @@ export const LESSONS: Lesson[] = [
   },
   {
     id: 'numerals', title: '4. Numbers', steps: [
-      { text: '**Church numerals** represent n as "apply f n times": `2 = λf x.f (f x)`. Digits in the source are Church numerals, and results are recognised and shown as numbers.\n\nPress **Run ⏭** to reduce to normal form.', load: 'PLUS 2 3', focus: '.controls', goal: { text: 'Compute 2 + 3', check: (s) => num(s) === 5 } },
-      { text: 'Multiplication is composition, and exponentiation is plain application: `EXP 2 3 = 3 2`. Try `MULT 3 4` or `EXP 2 5`. The **Number table** tool shows a function on 0, 1, 2, … and guesses a formula.', load: 'λn.MULT n n', tool: 'table', focus: '.tools-panel' },
+      { text: '**Church numerals** represent n as "apply f n times": `2 = λf x.f (f x)`. Digits in the source are Church numerals, and results are recognised and shown as numbers.\n\nPress **Run** to reduce to normal form.', load: 'PLUS 2 3', focus: '.controls', goal: { text: 'Compute 2 + 3', check: (s) => num(s) === 5 } },
+      { text: 'Multiplication is composition, and exponentiation is plain application: `EXP 2 3 = 3 2`. Try `MULT 3 4` or `EXP 2 5`. The **Number table** tool shows a function on 0, 1, 2, … and guesses a formula.', load: 'λn.MULT n n', tool: 'table', focus: '.side-panel' },
     ],
   },
   {
     id: 'booleans', title: '5. Truth values', steps: [
       { text: '`TRUE = λt f.t` and `FALSE = λt f.f` choose between two arguments, so `IF b x y` is just `b x y`. AND, OR and NOT are short terms built on that.', load: 'AND TRUE (NOT FALSE)', goal: { text: 'Evaluate it to TRUE', check: (s) => { const t = currentTerm(s); return !!t && decodeBool(t) === true; } } },
-      { text: 'The **Truth table** tool applies a term to every combination of TRUE and FALSE and finds a minimal formula. In **Expression → λ** you can type a formula like `(a ∧ ¬b) ∨ c` and get its λ-term.', load: 'XOR', tool: 'truth', focus: '.tools-panel' },
+      { text: 'The **Truth table** tool applies a term to every combination of TRUE and FALSE and finds a minimal formula. In **Expression → λ** you can type a formula like `(a ∧ ¬b) ∨ c` and get its λ-term.', load: 'XOR', tool: 'truth', focus: '.side-panel' },
     ],
   },
   {

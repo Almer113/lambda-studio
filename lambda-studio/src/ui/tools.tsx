@@ -23,35 +23,34 @@ import type { ToolRequest, ToolResponse, EnumItem } from '../worker/tools.worker
 import ToolsWorker from '../worker/tools.worker?worker&inline';
 import type { BBResult } from '../core/generate';
 import { NumberField } from './NumberField';
+import { FileInput, TextCursorInput, ListPlus, Dices, Sigma, Table, Hash, Equal, Boxes } from 'lucide-react';
+import { TabList, TabPanel, type TabDef } from './Tabs';
+import { insertIntoSource } from './Toast';
+import { IconButton, CopyButton } from './IconButton';
 
-const TABS: { id: ToolsTab; name: string; title: string }[] = [
-  { id: 'expr', name: 'Expression → λ', title: 'Arithmetic and Boolean expressions as λ-terms' },
-  { id: 'truth', name: 'Truth table', title: 'Truth table, DNF/CNF and a minimal formula of the current term' },
-  { id: 'table', name: 'Number table', title: 'Values of the current term on Church numerals, with a guessed closed form' },
-  { id: 'laws', name: 'Laws', title: 'Check an equation between two terms (βη)' },
-  { id: 'data', name: 'Data types', title: 'Church, Scott and Parigot encodings of a data type declaration' },
-  { id: 'generate', name: 'Generate', title: 'Count, sample and enumerate closed terms; the BBλ explorer' },
+const TABS: TabDef<ToolsTab>[] = [
+  { id: 'expr', label: 'Expression', icon: Sigma, title: 'Expression → λ: arithmetic and Boolean expressions as λ-terms' },
+  { id: 'truth', label: 'Truth table', icon: Table, title: 'Truth table, DNF/CNF and a minimal formula of the current term' },
+  { id: 'table', label: 'Numbers', icon: Hash, title: 'Number table: values of the current term on Church numerals, with a guessed closed form' },
+  { id: 'laws', label: 'Laws', icon: Equal, title: 'Check an equation between two terms (βη)' },
+  { id: 'data', label: 'Data types', icon: Boxes, title: 'Church, Scott and Parigot encodings of a data type declaration' },
+  { id: 'generate', label: 'Generate', icon: Dices, title: 'Count, sample and enumerate closed terms; the BBλ explorer' },
 ];
 
 export function ToolsPanel() {
   const tab = useStore((s) => s.settings.toolsTab);
   const setSetting = useStore((s) => s.setSetting);
   return (
-    <div className="panel tools-panel">
-      <div className="panel-head">
-        <h2>Tools</h2>
-        <nav className="tool-tabs" role="tablist" aria-label="Tools">
-          {TABS.map((t) => <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'on' : ''} title={t.title} onClick={() => setSetting('toolsTab', t.id)}>{t.name}</button>)}
-        </nav>
-      </div>
-      <div className="tool-body">
+    <div className="tools-panel">
+      <TabList tabs={TABS} value={tab} onChange={(t) => setSetting('toolsTab', t)} label="Tools" idPrefix="tools" className="tool-tabs" />
+      <TabPanel idPrefix="tools" value={tab} className="tool-body">
         {tab === 'expr' && <ExpressionTool />}
         {tab === 'truth' && <TruthTool />}
         {tab === 'table' && <TableTool />}
         {tab === 'laws' && <LawsTool />}
         {tab === 'data' && <DataTool />}
         {tab === 'generate' && <GenerateTool />}
-      </div>
+      </TabPanel>
     </div>
   );
 }
@@ -90,26 +89,24 @@ function Busy({ busy, cancel, label }: { busy: { done: number; total: number } |
 
 function useActions() {
   const setSource = useStore((s) => s.setSource);
-  const insert = useStore((s) => s.insertText);
   const source = useStore((s) => s.source);
   return {
     use: (src: string) => setSource(src, 'auto'),
-    insert: (src: string) => insert?.(src),
+    insert: (src: string) => insertIntoSource(src, 'the term'),
     append: (src: string) => setSource(`${source.trimEnd()}\n\n${src}`),
   };
 }
 
 function Code({ text, actions = true }: { text: string; actions?: boolean }) {
   const a = useActions();
-  const [copied, setCopied] = useState(false);
   return (
     <div className="tool-code">
       <code>{text}</code>
       {actions && (
         <span className="tool-code-actions">
-          <button onClick={() => a.use(text)} title="Replace the source with this">Use as source</button>
-          <button onClick={() => a.insert(text)} title="Insert at the cursor in the source">Insert</button>
-          <button onClick={() => navigator.clipboard?.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); }).catch(() => {})}>{copied ? 'Copied' : 'Copy'}</button>
+          <IconButton icon={FileInput} text="Use as source" label="Replace the source with this" onClick={() => a.use(text)} />
+          <IconButton icon={TextCursorInput} text="Insert" label="Insert at the cursor in the source" onClick={() => a.insert(text)} />
+          <CopyButton text={text} what="this term" />
         </span>
       )}
     </div>
@@ -245,7 +242,7 @@ function TruthTool() {
         <>
           {f ? (
             <dl className="stats">
-              <dt>Minimal</dt><dd><b>{f.minimal}</b> <button className="small" onClick={() => navigator.clipboard?.writeText(f.minimal)}>Copy</button></dd>
+              <dt>Minimal</dt><dd><b>{f.minimal}</b> <CopyButton text={f.minimal} what="the minimal formula" /></dd>
               <dt>As λ</dt><dd><Code text={formulaToLambda(f.minimalCubes, table.vars)} /></dd>
               <dt>DNF</dt><dd className="wrap">{f.dnf}</dd>
               <dt>CNF</dt><dd className="wrap">{f.cnf}</dd>
@@ -424,8 +421,8 @@ function DataTool() {
           <pre className="tool-pre">{out.g.source}</pre>
           <div className="tool-row">
             {out.demo && <button className="primary" onClick={() => actions.use(`${out.g.source}\n${out.demo}`)} title="Replace the source with these definitions and evaluate the example's size">Use as source (with {out.demo})</button>}
-            <button onClick={() => actions.append(out.g.source)}>Append to source</button>
-            <button onClick={() => navigator.clipboard?.writeText(out.g.source)}>Copy</button>
+            <IconButton icon={ListPlus} text="Append to source" label="Append these definitions to the source" onClick={() => actions.append(out.g.source)} />
+            <CopyButton text={out.g.source} what="the definitions" />
           </div>
         </>
       )}
@@ -472,7 +469,7 @@ function GenerateTool() {
       </details>
       <h3>Random term</h3>
       <div className="tool-row">
-        <button onClick={() => setRand(randomClosedTerm(n, counter))} disabled={count === 0n}>Random closed term of {n} bits</button>
+        <IconButton icon={Dices} text={`Random term of ${n} bits`} label={`Random closed term of ${n} bits`} onClick={() => setRand(randomClosedTerm(n, counter))} disabled={count === 0n} />
         <span className="muted">uniform over all {count.toLocaleString('en')}</span>
       </div>
       {rand && <Code text={show(rand)} />}

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { create } from 'zustand';
-import { useStore, currentTerm, type Settings } from './store';
-import { FORMATS, type FormatId } from '../core/program';
+import { useStore, currentTerm } from './store';
 import { layoutSafe } from './render';
 import { toSVG } from '../core/diagram/svg';
 import { toTikZ, toTypst } from '../core/diagram/vector';
@@ -14,8 +13,10 @@ import { size } from '../core/term';
 import { useIsDark } from './theme';
 import { useFolder } from './panels';
 import { planVideo, encodeGif, encodeWebm, webmSupported, type VideoOptions } from './video';
-import { download } from './DiagramView';
+import { download, workspaceJSON, openWorkspace, saveWorkspace } from './workspace';
 import { NumberField } from './NumberField';
+import { X, Download, FolderOpen, Save } from 'lucide-react';
+import { IconButton, CopyButton } from './IconButton';
 
 type Tab = 'diagram' | 'animation' | 'text' | 'workspace';
 
@@ -50,7 +51,7 @@ export function ExportDialog() {
             <nav className="export-tabs" role="tablist">
               {TABS.map((t) => <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'on' : ''} onClick={() => useExport.getState().show(t.id)}>{t.name}</button>)}
             </nav>
-            <button className="close" onClick={hide} aria-label="Close">✕</button>
+            <IconButton icon={X} className="close" label="Close" onClick={hide} />
           </div>
           {tab === 'diagram' && <DiagramExport />}
           {tab === 'animation' && <AnimationExport />}
@@ -149,8 +150,8 @@ function DiagramExport() {
           : previewSvg ? <div className="img-preview" style={{ background: transparent ? 'repeating-conic-gradient(#8884 0 25%, transparent 0 50%) 0 0 / 16px 16px' : undefined }} dangerouslySetInnerHTML={{ __html: previewSvg.replace('<svg ', '<svg preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%" ') }} /> : <p className="muted">Too large to preview.</p>}
       </div>
       <div className="export-actions">
-        {isText && text && <CopyButton text={text} />}
-        <button className="primary" onClick={save} disabled={tooWide}>Download .{info.ext}</button>
+        {isText && text && <CopyButton text={text} what="the export" showText />}
+        <IconButton icon={Download} className="primary" text={`Download .${info.ext}`} label={`Download .${info.ext}`} onClick={save} disabled={tooWide} />
       </div>
     </div>
   );
@@ -228,7 +229,7 @@ function AnimationExport() {
       <div className="export-actions">
         {busy ? <button onClick={() => abort.current?.abort()}>Cancel</button> : <button onClick={make} disabled={!plan.plan}>Make {kind.toUpperCase()}</button>}
         {result && <span className="muted">{(result.blob.size / 1024).toFixed(0)} KB</span>}
-        <button className="primary" disabled={!result} onClick={() => result && download(result.blob, `lambda-reduction.${result.kind}`)}>Download</button>
+        <IconButton icon={Download} className="primary" text={result ? `Download .${result.kind}` : 'Download'} label="Download the animation" disabled={!result} onClick={() => result && download(result.blob, `lambda-reduction.${result.kind}`)} />
       </div>
     </div>
   );
@@ -288,52 +289,37 @@ function TextExport() {
       </div>
       <div className="export-preview">{out.error ? <p className="err">{out.error}</p> : <textarea readOnly value={out.text} spellCheck={false} />}</div>
       <div className="export-actions">
-        {!out.error && !out.bytes && <CopyButton text={out.text} />}
-        <button className="primary" onClick={save} disabled={!!out.error}>Download .{info.ext}</button>
+        {!out.error && !out.bytes && <CopyButton text={out.text} what="the export" showText />}
+        <IconButton icon={Download} className="primary" text={`Download .${info.ext}`} label={`Download .${info.ext}`} onClick={save} disabled={!!out.error} />
       </div>
     </div>
   );
 }
 
 // --- workspace ---------------------------------------------------------------
-interface Workspace { app: 'lambda-studio'; version: 1; source: string; format: string; settings: Partial<Settings> }
-
 function WorkspaceExport() {
-  const source = useStore((s) => s.source);
-  const format = useStore((s) => s.format);
-  const settings = useStore((s) => s.settings);
+  // re-render when what the file would hold changes
+  useStore((s) => s.source); useStore((s) => s.format); useStore((s) => s.settings);
+  const json = workspaceJSON();
   const [msg, setMsg] = useState<{ text: string; tone: 'ok' | 'err' } | null>(null);
-  const ws: Workspace = { app: 'lambda-studio', version: 1, source, format, settings };
-  const json = JSON.stringify(ws, null, 2);
   const file = useRef<HTMLInputElement>(null);
-
   const load = async (f: File) => {
-    try {
-      const w = JSON.parse(await f.text()) as Partial<Workspace>;
-      if (w.app !== 'lambda-studio' || typeof w.source !== 'string') throw new Error('Not a Lambda Studio workspace file.');
-      const st = useStore.getState();
-      st.replaceSettings({ ...st.settings, ...(w.settings && typeof w.settings === 'object' ? w.settings : {}) });
-      const format = FORMATS.some((x) => x.id === w.format) ? (w.format as FormatId) : 'auto';
-      st.setSource(w.source, format);
-      setMsg({ text: `Loaded ${f.name}.`, tone: 'ok' });
-    } catch (e) { setMsg({ text: (e as Error).message, tone: 'err' }); }
+    try { await openWorkspace(f); setMsg({ text: `Loaded ${f.name}.`, tone: 'ok' }); }
+    catch (e) { setMsg({ text: (e as Error).message, tone: 'err' }); }
   };
 
   return (
     <div className="export-pane">
-      <p className="muted">A workspace file holds the source, the input format and all settings. Opening one replaces the current source.</p>
+      <p className="muted">A workspace file holds the source, the input format and all settings. Opening one replaces the current source. The File menu in the header does the same.</p>
       <div className="export-preview"><textarea readOnly value={json} spellCheck={false} /></div>
       {msg && <p className={msg.tone === 'err' ? 'err' : 'ok'}>{msg.text}</p>}
       <div className="export-actions">
         <input ref={file} type="file" accept=".json,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) load(f); e.target.value = ''; }} />
-        <button onClick={() => file.current?.click()}>Open workspace…</button>
-        <button className="primary" onClick={() => download(new Blob([json], { type: 'application/json' }), 'lambda-workspace.json')}>Download .json</button>
+        <IconButton icon={FolderOpen} text="Open workspace…" label="Open a workspace file" onClick={() => file.current?.click()} />
+        <IconButton icon={Save} className="primary" text="Download .json" label="Save the workspace as .json" onClick={saveWorkspace} />
       </div>
     </div>
   );
 }
 
-function CopyButton({ text }: { text: string }) {
-  const [ok, setOk] = useState(false);
-  return <button onClick={() => navigator.clipboard?.writeText(text).then(() => { setOk(true); setTimeout(() => setOk(false), 1200); }).catch(() => {})}>{ok ? 'Copied' : 'Copy'}</button>;
-}
+

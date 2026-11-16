@@ -13,7 +13,9 @@ interface Thunk { val?: Val; term?: Term; env?: Env }
 type Env = { head: Thunk; tail: Env } | null;
 type Val =
   | { k: 'lam'; body: Term; env: Env; hint?: string }
-  | { k: 'neu'; head: number | string; spine: Thunk[] };
+  | { k: 'neu'; head: number | string; spine: Spine };
+/** Arguments of a neutral term, last one first: adding one is O(1) and shares the rest. */
+type Spine = { arg: Thunk; rest: Spine } | null;
 
 class OutOfFuel extends Error {}
 
@@ -59,7 +61,7 @@ export function normalize(t: Term, fuel = 1_000_000, eta = false): NormalizeResu
           t = th.term!; env = th.env!;
           continue;
         }
-        case 'free': val = { k: 'neu', head: t.name, spine: [] }; break;
+        case 'free': val = { k: 'neu', head: t.name, spine: null }; break;
         case 'lam': val = { k: 'lam', body: t.body, env, hint: t.hint }; break;
         case 'app':
           frames.push({ arg: { term: t.arg, env } });
@@ -80,7 +82,7 @@ export function normalize(t: Term, fuel = 1_000_000, eta = false): NormalizeResu
           t = val.body; env = { head: fr.arg!, tail: val.env };
           break; // evaluate the body
         }
-        val = { k: 'neu', head: val.head, spine: [...val.spine, fr.arg!] };
+        val = { k: 'neu', head: val.head, spine: { arg: fr.arg!, rest: val.spine } };
       }
     }
   };
@@ -98,13 +100,14 @@ export function normalize(t: Term, fuel = 1_000_000, eta = false): NormalizeResu
     const visit = (val: Val, level: number) => {
       if (val.k === 'lam') {
         tasks.push({ q: 'lam', hint: val.hint });
-        const x: Thunk = { val: { k: 'neu', head: level, spine: [] } };
+        const x: Thunk = { val: { k: 'neu', head: level, spine: null } };
         tasks.push({ q: 'body', body: val.body, env: { head: x, tail: val.env }, level: level + 1 });
         return;
       }
       out.push(typeof val.head === 'number' ? v(level - val.head - 1) : free(val.head));
       // h a1 … an: quote a1, apply, quote a2, apply, … (pushed in reverse)
-      for (let k = val.spine.length - 1; k >= 0; k--) tasks.push({ q: 'app' }, { q: 'thunk', th: val.spine[k], level });
+      // the spine lists the last argument first, which is the order the tasks are pushed in
+      for (let sp = val.spine; sp; sp = sp.rest) tasks.push({ q: 'app' }, { q: 'thunk', th: sp.arg, level });
     };
     visit(root, 0);
     while (tasks.length) {
@@ -136,6 +139,6 @@ export function normalize(t: Term, fuel = 1_000_000, eta = false): NormalizeResu
 function openEnv(t: Term): Env {
   const max = maxFree(t);
   let env: Env = null;
-  for (let k = max - 1; k >= 0; k--) env = { head: { val: { k: 'neu', head: -(k + 1), spine: [] } }, tail: env };
+  for (let k = max - 1; k >= 0; k--) env = { head: { val: { k: 'neu', head: -(k + 1), spine: null } }, tail: env };
   return env;
 }

@@ -19,6 +19,9 @@ import { TexView, ViewToggle } from './Tex';
 import { reduceInnermost } from './TermText';
 import { useFolder } from './panels';
 import { NoTerm } from './NoTerm';
+import { ChevronDown, ChevronRight, TextCursorInput, FileInput } from 'lucide-react';
+import { insertIntoSource } from './Toast';
+import { IconButton, CopyButton } from './IconButton';
 
 const BIG = 25000;
 /** Longest text shown in a row (copy still gives everything). */
@@ -133,14 +136,13 @@ export function Conversions() {
   }, [term, tooBig, fold, avoid, cl, open]);
 
   return (
-    <div className="panel conversions">
-      <div className="panel-head"><h2>Notations</h2></div>
+    <div className="conversions">
       {!term && <NoTerm text="—" brief />}
       {tooBig && <button onClick={() => setForce(true)}>Term is large ({size(term!)} nodes) — compute notations</button>}
       {term && !tooBig && GROUPS.map((g) => (
         <section key={g.id} className="conv-group">
           <button className="group-title" aria-expanded={!!open[g.id]} onClick={() => setSetting('openGroups', { ...open, [g.id]: !open[g.id] })}>
-            {open[g.id] ? '▾' : '▸'} {g.title}
+            {open[g.id] ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />} {g.title}
           </button>
           {open[g.id] && g.id === 'combinators' && (
             <div className="alg-row">
@@ -164,15 +166,6 @@ export function Conversions() {
   );
 }
 
-function CopyButton({ text, label = 'Copy' }: { text: string; label?: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button className="copy" onClick={() => { navigator.clipboard?.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); }).catch(() => {}); }}>
-      {copied ? 'Copied' : label}
-    </button>
-  );
-}
-
 function OutputRow({ row }: { row: Row }) {
   const { id, label, text, note, mono, error } = row;
   const [asTex, setAsTex] = useTexSetting(id);
@@ -187,8 +180,8 @@ function OutputRow({ row }: { row: Row }) {
         {(note || text.length > SHOW) && <span className="out-note">{text.length > SHOW ? `${text.length.toLocaleString()} characters, showing the start · ` : ''}{note}</span>}
         <span className="out-tools">
           {row.tex && text && <ViewToggle tex={asTex} onChange={setAsTex} />}
-          {text && <CopyButton text={text} />}
-          {tex && <CopyButton text={tex.plain} label="LaTeX" />}
+          {text && <CopyButton text={text} what={label} />}
+          {tex && <CopyButton text={tex.plain} what={`${label} as LaTeX`} caption="TeX" />}
         </span>
       </div>
       {error && <div className="out-error">{error}</div>}
@@ -203,7 +196,6 @@ export function DataPanel() {
   const [kind, setKind] = useState<DataKind>('nat');
   const [enc, setEnc] = useState<Encoding>('church');
   const [value, setValue] = useState('5');
-  const insert = useStore((s) => s.insertText);
   const setSource = useStore((s) => s.setSource);
   const info = DATA_KINDS.find((k) => k.id === kind)!;
   const encoding = info.encodings.includes(enc) ? enc : info.encodings[0];
@@ -231,8 +223,8 @@ export function DataPanel() {
         <>
           <pre className="out-text">{result.text!.length > 2000 ? result.text!.slice(0, 2000) + '…' : result.text}</pre>
           <div className="buttons">
-            <button onClick={() => insert?.(`(${result.text})`)}>Insert</button>
-            <button onClick={() => setSource(result.text!, 'auto')}>Use as source</button>
+            <IconButton icon={TextCursorInput} text="Insert" label="Insert at the cursor in the source" onClick={() => insertIntoSource(`(${result.text})`, 'the encoded value')} />
+            <IconButton icon={FileInput} text="Use as source" label="Replace the source with this term" onClick={() => setSource(result.text!, 'auto')} />
             <span className="sub">{result.size} nodes</span>
           </div>
         </>

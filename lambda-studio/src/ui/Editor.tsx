@@ -117,9 +117,22 @@ export function Editor() {
     ];
     const v = new EditorView({ state: EditorState.create({ doc: useStore.getState().source, extensions: exts }), parent: host.current! });
     view.current = v;
+    // Until the user has placed the cursor, insertions go at the end of the main expression (the
+    // cursor would otherwise sit at the very start, and `K` would land before `PLUS 2 3`).
+    let placed = false;
+    v.contentDOM.addEventListener('pointerdown', () => { placed = true; });
+    v.contentDOM.addEventListener('keydown', () => { placed = true; });
     useStore.getState().registerInsert((s: string) => {
-      const sel = v.state.selection.main;
-      v.dispatch({ changes: { from: sel.from, to: sel.to, insert: s }, selection: { anchor: sel.from + s.length } });
+      const doc = v.state.doc;
+      const sel = placed ? v.state.selection.main : { from: doc.length, to: doc.length };
+      let from = sel.from;
+      const to = sel.to;
+      if (!placed) { while (from > 0 && /\s/.test(doc.sliceString(from - 1, from))) from--; }
+      // keep tokens apart: a space on either side unless there is one (or a bracket) already
+      const before = doc.sliceString(Math.max(0, from - 1), from), after = doc.sliceString(to, to + 1);
+      const text = (from > 0 && !/[\s(\[]/.test(before) ? ' ' : '') + s + (after && !/[\s)\],]/.test(after) ? ' ' : '');
+      v.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length }, scrollIntoView: true });
+      placed = true;
       v.focus();
     });
     useStore.getState().registerReveal((from, to) => {

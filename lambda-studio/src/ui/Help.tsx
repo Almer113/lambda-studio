@@ -7,6 +7,12 @@ import { useStore, currentTerm } from './store';
 import { getAt, size } from '../core/term';
 import { printNamed } from '../core/formats/named';
 import { useTutorial } from './Tutorial';
+import { X, Keyboard, BookOpen, Languages } from 'lucide-react';
+import { TabList, TabPanel, type TabDef } from './Tabs';
+import { Markdown } from './Markdown';
+import GUIDE from '../../docs/USER_GUIDE.md?raw';
+import FORMATS_DOC from '../../docs/FORMATS.md?raw';
+import { IconButton } from './IconButton';
 
 export const useHelp = create<{ open: boolean; set(v: boolean): void }>((set) => ({ open: false, set: (open) => set({ open }) }));
 
@@ -91,8 +97,16 @@ export function Announcer() {
   return <div className="sr-only" aria-live="polite" role="status">{text}</div>;
 }
 
+type HelpTab = 'basics' | 'guide' | 'formats';
+const HELP_TABS: TabDef<HelpTab>[] = [
+  { id: 'basics', label: 'Basics', icon: Keyboard },
+  { id: 'guide', label: 'User guide', icon: BookOpen },
+  { id: 'formats', label: 'Notations', icon: Languages },
+];
+
 export function Help() {
   const { open, set } = useHelp();
+  const [tab, setTab] = useState<HelpTab>('basics');
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const d = ref.current;
@@ -106,15 +120,25 @@ export function Help() {
       <dialog ref={ref} className="export-dialog help-dialog" onClose={() => set(false)} onClick={(e) => { if (e.target === ref.current) set(false); }} aria-labelledby="help-title">
         {open && (
           <div className="export-body">
-            <div className="export-head"><h2 id="help-title">Help</h2><button className="close" onClick={() => set(false)} aria-label="Close">✕</button></div>
+            <div className="export-head">
+              <h2 id="help-title">Help</h2>
+              <TabList<HelpTab> tabs={HELP_TABS} value={tab} onChange={setTab} label="Help sections" idPrefix="help" className="export-tabs" />
+              <IconButton icon={X} className="close" label="Close" onClick={() => set(false)} />
+            </div>
+            <TabPanel idPrefix="help" value={tab} className="help-body">
+            {tab === 'guide' && <Markdown text={GUIDE} skipTitle />}
+            {tab === 'formats' && <Markdown text={FORMATS_DOC} skipTitle />}
+            {tab === 'basics' && <>
             <p>Type a λ-term in the <b>Source</b> editor (or paste one in another notation: it is detected), then step through its reduction and watch the Tromp diagram. New here? Open the <button className="linklike" onClick={() => { set(false); useTutorial.getState().set({ open: true }); }}>tutorial</button>.</p>
             <h3>Keyboard and mouse</h3>
             <table className="shortcuts"><tbody>{SHORTCUTS.map(([k, d]) => <tr key={k}><th><kbd>{k}</kbd></th><td>{d}</td></tr>)}</tbody></table>
             <h3>Syntax</h3>
             <p><code>λx y.M</code> or <code>\x y -&gt; M</code> · application <code>f x y</code> = <code>(f x) y</code> · definitions <code>NAME = term</code> (recursive definitions are compiled with Y) · numbers are Church numerals · <code>[1, 2]</code> lists · <code>"text"</code> strings · <code>let x = M in N</code> · comments <code>--</code>.</p>
-            <p className="muted">The user guide and the format reference are in the <code>docs/</code> folder of the project.</p>
+            <p className="muted">The full guide and the notation reference are in the other two tabs.</p>
             <h3>Settings</h3>
-            <p>Settings are kept in this browser. <button onClick={() => { useStore.getState().replaceSettings(); useStore.setState({ message: { text: 'Settings were reset to their defaults.', tone: 'info' } }); set(false); }}>Reset settings</button> <span className="muted">(your source is kept)</span></p>
+            <p>Settings are kept in this browser; the gear button in the header changes them. <button onClick={() => { useStore.getState().replaceSettings(); useStore.setState({ message: { text: 'Settings were reset to their defaults.', tone: 'info' } }); set(false); }}>Reset settings</button> <span className="muted">(your source is kept)</span></p>
+            </>}
+            </TabPanel>
           </div>
         )}
       </dialog>

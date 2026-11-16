@@ -4,13 +4,14 @@ import { segmentRect } from '../core/diagram/svg';
 import { type Term, type Path, size } from '../core/term';
 import { colorPaths, bitmapOf, SegmentIndex } from './canvasLayer';
 import { type ColorMode, COLOR_MODES, segmentColor } from '../core/diagram/colors';
-import { useStore, currentTerm } from './store';
+import { useStore, currentTerm, useNextRedex } from './store';
 import { type View, fitView, layoutSafe, stepMorph, morphFrame, paint, highlightColors } from './render';
 import { useExport } from './ExportDialog';
 import { DEF_MIME, preludeOrUserTerm } from './dnd';
-import { findRedex } from '../core/reduce';
 import { useIsDark } from './theme';
 import { NoTerm } from './NoTerm';
+import { Film, Crosshair, Scan, ZoomIn, ZoomOut, ImageDown } from 'lucide-react';
+import { IconButton } from './IconButton';
 
 const SVG_LIMIT = 6000; // segments; above this the diagram is drawn on a canvas
 const DRAW_LIMIT = 1_500_000; // term nodes; above this we do not lay the diagram out
@@ -49,7 +50,8 @@ export function DiagramView() {
   /** The segment under the first click of a possible double-click (the page may move in between). */
   const firstClick = useRef<{ seg: Segment | null; at: number } | null>(null);
 
-  const redex = useMemo(() => (term && settings.showRedex ? findRedex(term, settings) : null), [term, settings]);
+  const next = useNextRedex();
+  const redex = settings.showRedex ? next : null;
   const useCanvas = !!diagram && diagram.segments.length > SVG_LIMIT;
 
   const fit = useCallback(() => {
@@ -57,6 +59,18 @@ export function DiagramView() {
     if (!el || !diagram) return;
     setView(fitView(diagram, el.clientWidth, el.clientHeight));
   }, [diagram]);
+
+  /** Zoom the buttons apply: about the centre of the view (not the top-left corner). */
+  const zoomBy = (k: number) => {
+    const el = wrap.current;
+    const cx = (el?.clientWidth ?? 0) / 2, cy = (el?.clientHeight ?? 0) / 2;
+    setAutoFit(false);
+    setView((v) => {
+      const scale = Math.max(0.02, Math.min(200, v.scale * k));
+      const f = scale / v.scale;
+      return { scale, tx: cx - (cx - v.tx) * f, ty: cy - (cy - v.ty) * f };
+    });
+  };
 
   useEffect(() => { if (autoFit) fit(); }, [diagram, autoFit, fit]);
   useEffect(() => {
@@ -260,12 +274,13 @@ export function DiagramView() {
           <select aria-label="Colour mode" value={settings.colorMode} onChange={(e) => useStore.getState().setSetting('colorMode', e.target.value as ColorMode)}>
             {COLOR_MODES.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
-          <label className="check" title="Animate single β-steps"><input type="checkbox" checked={settings.animate} onChange={(e) => useStore.getState().setSetting('animate', e.target.checked)} /> Animate</label>
-          <label className="check"><input type="checkbox" checked={settings.showRedex} onChange={(e) => useStore.getState().setSetting('showRedex', e.target.checked)} /> Next redex</label>
-          <button onClick={() => { setAutoFit(true); fit(); }} title="Fit to view">Fit</button>
-          <button onClick={() => { setAutoFit(false); setView((v) => ({ ...v, scale: v.scale * 1.25 })); }} title="Zoom in" aria-label="Zoom in">+</button>
-          <button onClick={() => { setAutoFit(false); setView((v) => ({ ...v, scale: v.scale / 1.25 })); }} title="Zoom out" aria-label="Zoom out">−</button>
-          <button onClick={() => useExport.getState().show('diagram')} disabled={!diagram}>Export…</button>
+          <IconButton icon={Film} className="toggle" label="Animate single β-steps" pressed={settings.animate} onClick={() => useStore.getState().setSetting('animate', !settings.animate)} />
+          <IconButton icon={Crosshair} className="toggle" label="Highlight the next redex" pressed={settings.showRedex} onClick={() => useStore.getState().setSetting('showRedex', !settings.showRedex)} />
+          <span className="tb-sep" aria-hidden />
+          <IconButton icon={Scan} className="toggle" label="Fit the diagram to the view" pressed={autoFit} onClick={() => { setAutoFit(true); fit(); }} />
+          <IconButton icon={ZoomIn} label="Zoom in" shortcut="Ctrl+wheel" onClick={() => zoomBy(1.25)} />
+          <IconButton icon={ZoomOut} label="Zoom out" onClick={() => zoomBy(1 / 1.25)} />
+          <IconButton icon={ImageDown} label="Export the diagram" onClick={() => useExport.getState().show('diagram')} disabled={!diagram} />
         </div>
       </div>
       <div
@@ -347,11 +362,7 @@ export function DiagramView() {
         )}
         {dropAt && <div className="drop-hint">Drop to replace this {dropAt.kind === 'var' ? 'variable' : dropAt.kind === 'lam' ? 'abstraction' : 'application'}</div>}
       </div>
-      {redex !== null && diagram && !useCanvas && (
-        <div className="legend">
-          <span className="sw hl-fn" /> function λ and its variables <span className="sw hl-arg" /> argument <span className="sw hl-link" /> application · double-click a link to reduce · drag to pan · Ctrl+wheel to zoom
-        </div>
-      )}
+      {diagram && <Legend mode={settings.colorMode} redex={redex !== null && !useCanvas} />}
     </div>
   );
 }
@@ -362,10 +373,18 @@ function describeSeg(s: Segment): string {
   return s.binder == null ? 'free variable' : `variable (de Bruijn ${s.index})`;
 }
 
-export function download(blob: Blob, name: string) {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+
+const COARSE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+
+/** What the colours mean in the current mode, the redex highlight, and how to interact. */
+function Legend({ mode, redex }: { mode: ColorMode; redex: boolean }) {
+  return (
+    <div className="legend">
+      {mode === 'binder' && <span>Each λ and the variables it binds share a colour; <span className="sw kind-app" /> applications are grey; <span className="sw kind-free" /> free variables are red.</span>}
+      {mode === 'depth' && <span>Colour follows depth: the hue shifts with each enclosing λ.</span>}
+      {mode === 'kind' && <span><span className="sw kind-lam" /> λ <span className="sw kind-app" /> application <span className="sw kind-var" /> bound variable <span className="sw kind-free" /> free variable</span>}
+      {redex && <span>Next redex: <span className="sw hl-fn" /> function λ and its variables <span className="sw hl-arg" /> argument <span className="sw hl-link" /> application</span>}
+      <span className="legend-how">{COARSE ? 'Double-tap a link to reduce · drag to pan · pinch to zoom' : 'Double-click a link to reduce · drag to pan · Ctrl+wheel to zoom'}</span>
+    </div>
+  );
 }

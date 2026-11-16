@@ -1,23 +1,24 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useStore, currentTerm, shareLink } from './store';
-import { useExport } from './ExportDialog';
+import { useStore, currentTerm, useNextRedex } from './store';
+import { useShallow } from 'zustand/react/shallow';
 import { inferType, typeTex } from '../core/types';
 import { printNamed, type Printed } from '../core/formats/named';
 import { makeFolder } from '../core/fold';
-import { findRedex, STRATEGIES, type Strategy } from '../core/reduce';
+import { STRATEGIES } from '../core/reduce';
 import { termStats } from '../core/stats';
 import { size, type Term, type Path } from '../core/term';
-import { FORMATS, preludeInfo, type FormatId } from '../core/program';
-import { EXAMPLES } from '../core/prelude';
+import { preludeInfo } from '../core/program';
+import { PRELUDE } from '../core/prelude';
+import { insertIntoSource } from './Toast';
 import { describeMore } from '../core/data';
 import { TermText, reduceInnermost } from './TermText';
 import { printLatex } from '../core/formats/latex';
 import { TexView, ViewToggle } from './Tex';
 import { EditBar } from './EditBar';
 import { startDefDrag } from './dnd';
-import { useTutorial } from './Tutorial';
-import { useHelp } from './Help';
 import { NoTerm } from './NoTerm';
+import { SkipBack, StepBack, StepForward, Play, Pause, FastForward, Zap, Square, ChevronDown, ChevronRight, Tag } from 'lucide-react';
+import { IconButton } from './IconButton';
 
 function useTexSetting(id: string): [boolean, (v: boolean) => void] {
   const tex = useStore((s) => s.settings.tex[id] ?? false);
@@ -61,7 +62,8 @@ export function CurrentTerm() {
   const history = useStore((s) => s.history);
   const { fold, avoid } = useFolder(term);
   const printed = useMemo<Printed | null>(() => (term && size(term) < BIG * 4 ? printNamed(term, { fold, avoid }) : null), [term, fold, avoid]);
-  const redex = useMemo(() => (term && settings.showRedex ? findRedex(term, settings) : null), [term, settings]);
+  const next = useNextRedex();
+  const redex = settings.showRedex ? next : null;
   const via = history[index]?.via;
   const [asTex, setAsTex] = useTexSetting('current');
   const hover = useStore((s) => s.hover);
@@ -74,7 +76,7 @@ export function CurrentTerm() {
       <div className="panel-head">
         <h2>Current term {index > 0 && <span className="sub">step {index}{via?.kind ? ` · ${via.kind === 'nbe' ? 'fast normalizer' : via.kind === 'run' ? 'run' : via.kind + '-reduction'}` : ''}</span>}</h2>
         <span className="head-tools">
-          <label className="check"><input type="checkbox" checked={settings.foldNames} onChange={(e) => useStore.getState().setSetting('foldNames', e.target.checked)} /> Show names &amp; numerals</label>
+          <IconButton icon={Tag} label="Show names and numerals for known parts" pressed={settings.foldNames} className="toggle" onClick={() => useStore.getState().setSetting('foldNames', !settings.foldNames)} />
           <ViewToggle tex={asTex} onChange={setAsTex} />
         </span>
       </div>
@@ -94,35 +96,40 @@ export function CurrentTerm() {
 
 // --- Controls ----------------------------------------------------------------
 export function Controls() {
-  const s = useStore();
-  const term = currentTerm(s);
-  const atEnd = s.index >= s.history.length - 1;
-  const hasNext = useMemo(() => (term ? findRedex(term, s.settings) !== null : false), [term, s.settings]);
+  // only what the controls show: hover and selection changes do not re-render them
+  const s = useStore(useShallow((st) => ({
+    index: st.index, historyLength: st.history.length, running: st.running, playing: st.playing, message: st.message,
+    playSpeed: st.settings.playSpeed, goto: st.goto, stepBack: st.stepBack, stepForward: st.stepForward, setPlaying: st.setPlaying,
+    runToNormal: st.runToNormal, normalizeFast: st.normalizeFast, stop: st.stop, setSetting: st.setSetting,
+  })));
+  const term = useStore(currentTerm);
+  const atEnd = s.index >= s.historyLength - 1;
+  const hasNext = useNextRedex() !== null;
 
   useEffect(() => {
     if (!s.playing) return;
-    const id = window.setInterval(() => { if (!useStore.getState().stepForward()) useStore.getState().setPlaying(false); }, 1000 / s.settings.playSpeed);
+    const id = window.setInterval(() => { if (!useStore.getState().stepForward()) useStore.getState().setPlaying(false); }, 1000 / s.playSpeed);
     return () => window.clearInterval(id);
-  }, [s.playing, s.settings.playSpeed]);
+  }, [s.playing, s.playSpeed]);
 
   return (
     <div className="controls">
       <div className="buttons">
-        <button onClick={() => s.goto(0)} disabled={s.index === 0 || !!s.running} title="Back to the start" aria-label="Back to the start">⏮</button>
-        <button onClick={s.stepBack} disabled={s.index === 0 || !!s.running} title="Step back (Alt+←)">◀ Back</button>
-        <button className="primary" onClick={() => s.stepForward()} disabled={!term || (atEnd && !hasNext) || !!s.running} title="One reduction step (Alt+→)">Step ▶</button>
-        <button onClick={() => s.setPlaying(!s.playing)} disabled={!term || !!s.running || (atEnd && !hasNext)} title="Play steps automatically">{s.playing ? '⏸ Pause' : '⏵ Play'}</button>
-        <button onClick={s.runToNormal} disabled={!term || !!s.running || !hasNext} title="Reduce to normal form, recording steps (Ctrl+Enter)">Run ⏭</button>
-        <button onClick={s.normalizeFast} disabled={!term || !!s.running || !hasNext} title="Fast normalizer (no step history)">⚡ Normalize</button>
-        {s.running && <button className="danger" onClick={s.stop}>■ Stop</button>}
-        <label className="speed" title="Play speed">
-          <input type="range" min={1} max={30} value={s.settings.playSpeed} onChange={(e) => s.setSetting('playSpeed', Number(e.target.value))} />
-          {s.settings.playSpeed}/s
+        <IconButton icon={SkipBack} label="Back to the start" onClick={() => s.goto(0)} disabled={s.index === 0 || !!s.running} />
+        <IconButton icon={StepBack} text="Back" label="Step back" shortcut="Alt+←" onClick={s.stepBack} disabled={s.index === 0 || !!s.running} />
+        <IconButton icon={StepForward} className="primary" text="Step" label="One reduction step" shortcut="Alt+→" onClick={() => s.stepForward()} disabled={!term || (atEnd && !hasNext) || !!s.running} />
+        <IconButton icon={s.playing ? Pause : Play} text={s.playing ? 'Pause' : 'Play'} label={s.playing ? 'Pause' : 'Play steps automatically'} pressed={s.playing} onClick={() => s.setPlaying(!s.playing)} disabled={!term || !!s.running || (atEnd && !hasNext)} />
+        <IconButton icon={FastForward} text="Run" label="Reduce to normal form, recording the steps" shortcut="Ctrl+Enter" onClick={s.runToNormal} disabled={!term || !!s.running || !hasNext} />
+        <IconButton icon={Zap} text="Normalize" label="Fast normalizer (result only, no step history)" onClick={s.normalizeFast} disabled={!term || !!s.running || !hasNext} />
+        {s.running && <IconButton icon={Square} className="danger" text="Stop" label="Stop the evaluation" onClick={s.stop} />}
+        <label className="speed">
+          <input type="range" min={1} max={30} value={s.playSpeed} onChange={(e) => s.setSetting('playSpeed', Number(e.target.value))} aria-label="Play speed, steps per second" />
+          <span aria-hidden>{s.playSpeed}/s</span>
         </label>
       </div>
       <div className="timeline">
-        <input type="range" min={0} max={Math.max(0, s.history.length - 1)} value={s.index} onChange={(e) => s.goto(Number(e.target.value))} disabled={s.history.length < 2 || !!s.running} aria-label="Reduction timeline" />
-        <span className="tl-label">step {s.index} / {Math.max(0, s.history.length - 1)}</span>
+        <input type="range" min={0} max={Math.max(0, s.historyLength - 1)} value={s.index} onChange={(e) => s.goto(Number(e.target.value))} disabled={s.historyLength < 2 || !!s.running} aria-label="Reduction timeline" />
+        <span className="tl-label">step {s.index} / {Math.max(0, s.historyLength - 1)}</span>
       </div>
       {s.running && <div className="status running">{s.running.kind === 'run' ? `Reducing… ${s.running.steps} steps, ${s.running.size} nodes` : 'Normalizing…'}</div>}
       {!s.running && s.message && (
@@ -174,8 +181,10 @@ function TypeView({ text, tex, prop }: { text: string; tex: string; prop: string
 }
 
 // --- Library -----------------------------------------------------------------
+const PRELUDE_SRC = new Map(PRELUDE.map((e) => [e.name, e.src]));
+const short = (s: string) => (s.length > 160 ? s.slice(0, 160) + '…' : s);
+
 export function Library() {
-  const insert = useStore((s) => s.insertText);
   const program = useStore((s) => s.program);
   const info = useMemo(() => preludeInfo(), []);
   const groups = useMemo(() => {
@@ -187,12 +196,12 @@ export function Library() {
   return (
     <div className="panel library">
       <div className="panel-head"><h2>Library</h2></div>
-      <p className="hint">Click a name to insert it. Define your own with <code>NAME = term</code>.</p>
+      <p className="hint">Click a name to insert it, or drag it onto the diagram. Define your own with <code>NAME = term</code>.</p>
       {program.defs.length > 0 && (
         <div className="lib-group">
           <div className="lib-title">Your definitions</div>
           {program.defs.map((d) => (
-            <button key={d.name} className={`lib-item${d.error ? ' err' : ''}`} draggable onDragStart={(e) => startDefDrag(e, d.name)} onClick={() => insert?.(d.name + ' ')} title={d.error ?? (d.term ? printNamed(d.term).text : '')}>
+            <button key={d.name} className={`lib-item${d.error ? ' err' : ''}`} draggable onDragStart={(e) => startDefDrag(e, d.name)} onClick={() => insertIntoSource(d.name, d.name)} title={d.error ?? (d.term ? short(printNamed(d.term).text) : '')}>
               <span className="lib-name">{d.name}</span>{d.recursive && <span className="tag">rec</span>}{d.error && <span className="tag err">error</span>}
             </button>
           ))}
@@ -200,74 +209,14 @@ export function Library() {
       )}
       {groups.map(([g, items]) => (
         <div className="lib-group" key={g}>
-          <button className="lib-title" onClick={() => setOpen((o) => ({ ...o, [g]: !o[g] }))}>{open[g] ? '▾' : '▸'} {g}</button>
+          <button className="lib-title" aria-expanded={!!open[g]} onClick={() => setOpen((o) => ({ ...o, [g]: !o[g] }))}>{open[g] ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />} {g}</button>
           {open[g] && items.map((d) => (
-            <button key={d.name} className="lib-item" draggable onDragStart={(e) => startDefDrag(e, d.name)} onClick={() => insert?.(d.name + ' ')} title={`${d.doc}\n\n${d.term ? printNamed(d.term).text : ''}`}>
+            <button key={d.name} className="lib-item" draggable onDragStart={(e) => startDefDrag(e, d.name)} onClick={() => insertIntoSource(d.name, d.name)} title={`${d.doc}\n\n${d.name} = ${PRELUDE_SRC.get(d.name) ?? ''}`}>
               <span className="lib-name">{d.name}</span><span className="lib-doc">{d.doc}</span>
             </button>
           ))}
         </div>
       ))}
     </div>
-  );
-}
-
-// --- Header ------------------------------------------------------------------
-/**
- * Copy a share link. The page URL is left alone (a link written into the address bar would bring
- * this snapshot back over later work on reload). Without clipboard access (e.g. plain http) the
- * link is shown for copying by hand.
- */
-async function copyShareLink(source: string, format: FormatId | 'auto', copied: () => void) {
-  let url: string;
-  try { url = await shareLink(source, format); }
-  catch { useStore.setState({ message: { text: 'Could not create a share link in this browser.', tone: 'error' } }); return; }
-  try {
-    if (!navigator.clipboard) throw new Error('no clipboard');
-    await navigator.clipboard.writeText(url);
-    copied();
-    return;
-  } catch { /* no clipboard access: show the link instead */ }
-  try { window.prompt('Copy this link:', url); }
-  catch { useStore.setState({ message: { text: `Copy this link: ${url}`, tone: 'info' } }); } // embedded pages may not allow prompt()
-}
-
-export function Header() {
-  const s = useStore();
-  const [shared, setShared] = useState(false);
-  return (
-    <header className="header">
-      <div className="brand"><span className="logo">λ</span> Lambda Studio</div>
-      <div className="header-controls">
-        <select aria-label="Examples" value="" onChange={(e) => { const ex = EXAMPLES[Number(e.target.value)]; if (ex) s.setSource(ex.src, 'auto'); }}>
-          <option value="">Examples…</option>
-          {EXAMPLES.map((ex, i) => <option key={ex.name} value={i}>{ex.name}</option>)}
-        </select>
-        <label>Input
-          <select value={s.format} onChange={(e) => s.setFormat(e.target.value as FormatId | 'auto')}>
-            <option value="auto">Auto-detect{s.format === 'auto' ? ` (${FORMATS.find((f) => f.id === s.program.format)?.name})` : ''}</option>
-            {(['λ', 'Combinators', 'Code', 'Bits & data'] as const).map((g) => (
-              <optgroup key={g} label={g}>
-                {FORMATS.filter((f) => f.group === g).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
-              </optgroup>
-            ))}
-          </select>
-        </label>
-        <label>Strategy
-          <select value={s.settings.strategy} onChange={(e) => s.setSetting('strategy', e.target.value as Strategy)}>
-            {STRATEGIES.map((st) => <option key={st.id} value={st.id} title={st.description}>{st.name}</option>)}
-          </select>
-        </label>
-        <label className="check" title="Also contract η-redexes λx.M x → M"><input type="checkbox" checked={s.settings.eta} onChange={(e) => s.setSetting('eta', e.target.checked)} /> η</label>
-        <label className="check" title="Read λxy.xy as λx.λy.x y"><input type="checkbox" checked={s.settings.singleLetter} onChange={(e) => s.setSetting('singleLetter', e.target.checked)} /> Single-letter vars</label>
-        <button onClick={() => copyShareLink(s.source, s.format, () => { setShared(true); setTimeout(() => setShared(false), 1500); })} title="Copy a link that opens this source (compressed into the URL)">{shared ? 'Link copied' : 'Share link'}</button>
-        <button onClick={() => useExport.getState().show()}>Export…</button>
-        <button onClick={() => useTutorial.getState().set({ open: !useTutorial.getState().open })} aria-pressed={useTutorial((t) => t.open)}>Tutorial</button>
-        <button onClick={() => useHelp.getState().set(true)} aria-label="Help and keyboard shortcuts" title="Help and keyboard shortcuts (?)">?</button>
-        <select aria-label="Theme" value={s.settings.theme} onChange={(e) => s.setSetting('theme', e.target.value as 'system' | 'light' | 'dark')}>
-          <option value="system">System theme</option><option value="light">Light</option><option value="dark">Dark</option>
-        </select>
-      </div>
-    </header>
   );
 }

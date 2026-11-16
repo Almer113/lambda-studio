@@ -67,3 +67,14 @@ describe('P1 fixes', () => {
     expect(equal(normalize(t, 1000, true).term!, v(0))).toBe(true);
   });
 });
+
+describe('examples', () => {
+  it('every example parses in its format without errors', async () => {
+    const { EXAMPLES } = await import('../src/core/prelude');
+    for (const ex of EXAMPLES) {
+      const p = parseProgram(ex.src, ex.format ?? 'auto');
+      expect(p.diagnostics.filter((d) => d.severity === 'error'), ex.name).toEqual([]);
+      expect(p.term, ex.name).not.toBeNull();
+    }
+  });
+});
