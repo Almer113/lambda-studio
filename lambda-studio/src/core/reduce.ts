@@ -1,4 +1,4 @@
-import { type Term, type Path, app, lam, getAt, replaceAt, size, hash, equal } from './term';
+import { type Term, type Path, getAt, replaceAt, size, hash, equal } from './term';
 import { beta, isEtaRedex, etaContract } from './debruijn';
 
 export type Strategy = 'normal' | 'applicative' | 'cbn' | 'cbv' | 'head';
@@ -169,5 +169,3 @@ export function run(t: Term, opts: RunOptions): RunResult {
   }
 }
 
-// re-export for convenience
-export { app, lam };

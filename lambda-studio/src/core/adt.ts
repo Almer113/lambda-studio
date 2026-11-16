@@ -146,11 +146,11 @@ function sizeFunction(d: DataDecl, enc: Encoding, name: string): { name: string;
 const wrap = (s: string) => (s.includes(' ') ? `(${s})` : s);
 
 /** A small value using every constructor once if possible. */
-function example(d: DataDecl, upper: (c: string) => string): string | null {
+function example(d: DataDecl, ctorName: (c: string) => string): string | null {
   const base = d.ctors.find((c) => c.fields.every((f) => !f.recursive));
   if (!base) return null;
   const leafOf = (f: Field): string => {
-    if (f.recursive) return base.fields.length ? `(${upper(base.name)} ${base.fields.map(leafOf).join(' ')})` : upper(base.name);
+    if (f.recursive) return base.fields.length ? `(${ctorName(base.name)} ${base.fields.map(leafOf).join(' ')})` : ctorName(base.name);
     const h = headOf(f.type);
     if (/^(Nat|Int|Integer|Num|Number)$/.test(h)) return '1';
     if (/^Bool/.test(h)) return 'TRUE';
@@ -158,7 +158,7 @@ function example(d: DataDecl, upper: (c: string) => string): string | null {
   };
   const rec = d.ctors.find((c) => c.fields.some((f) => f.recursive));
   const top = rec ?? d.ctors[d.ctors.length - 1];
-  return top.fields.length ? `${upper(top.name)} ${top.fields.map(leafOf).join(' ')}` : upper(top.name);
+  return top.fields.length ? `${ctorName(top.name)} ${top.fields.map(leafOf).join(' ')}` : ctorName(top.name);
 }
 
 export const DATA_EXAMPLES: { name: string; src: string }[] = [

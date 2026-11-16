@@ -13,7 +13,9 @@ import { layout, layoutAlternative } from '../src/core/diagram/layout';
 import { toBoxChars } from '../src/core/diagram/ascii';
 import { betaLineage } from '../src/core/diagram/morph';
 import { equal } from '../src/core/term';
-import { rewriteSource } from '../src/core/edit';
+import { rewriteSource, sourceFolder } from '../src/core/edit';
+import { makeFolder } from '../src/core/fold';
+import { printNamed } from '../src/core/formats/named';
 
 const term = (s: string) => parseProgram(s).term!;
 
@@ -109,5 +111,24 @@ describe('limits and rendering', () => {
   });
   test('the prelude still compiles', () => {
     expect(preludeInfo().every((d) => d.term)).toBe(true);
+  });
+});
+
+describe('leftovers', () => {
+  test('an error in a definition is reported where it is, not at 0..0', () => {
+    const src = ['C = A', 'A = 200000', 'C'].join('\n');
+    const ds = parseProgram(src).diagnostics.map((d) => src.slice(d.from, d.to));
+    expect(ds).toEqual(['A', '200000', 'C']);
+  });
+  test('an edit folds only names the source already uses', () => {
+    const p = parseProgram('λx.x x');
+    const fold = makeFolder(p.foldTable, { numerals: true, zeroAs: '0' });
+    const t = term('λy.λx.x x');
+    expect(printNamed(t, { fold }).text).toContain('ω');
+    expect(printNamed(t, { fold: sourceFolder('λx.x x', fold) }).text).not.toContain('ω');
+    expect(printNamed(t, { fold: sourceFolder('ω', fold) }).text).toContain('ω');
+    const two = term('λg.g (λf x.f (f x))');
+    expect(printNamed(two, { fold: sourceFolder('λg.g (λf x.f (f x))', fold) }).text).not.toContain('2');
+    expect(printNamed(two, { fold: sourceFolder('SUCC 1', fold) }).text).toContain('2');
   });
 });

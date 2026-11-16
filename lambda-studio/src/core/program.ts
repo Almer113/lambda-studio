@@ -160,8 +160,9 @@ export function parseProgram(src: string, format: FormatId | 'auto' = 'auto', op
         return parseLatexProgram(src, opts, base);
       case 'blc8': {
         const bytes = parseBytes(src);
-        const r = decodeBLC(bytesToBits(bytes));
-        const padding = r.trailing > 0 && r.trailing < 8 && /^0*$/.test(bytesToBits(bytes).slice(r.used));
+        const bits = bytesToBits(bytes);
+        const r = decodeBLC(bits);
+        const padding = r.trailing > 0 && r.trailing < 8 && /^0*$/.test(bits.slice(r.used));
         const diagnostics: Diagnostic[] = r.trailing && !padding ? [{ from: 0, to: src.length, message: `${r.trailing} trailing bit(s) after the term were ignored (input data?)`, severity: 'warning' }] : [];
         return { ...base, term: r.term, diagnostics };
       }

@@ -72,6 +72,21 @@ export function rewriteSource(source: string, expr: string, newDefs: { name: str
   return parts.join('\n');
 }
 
+/**
+ * Restrict a folder to what `source` already uses: names that occur in it, and numerals only if
+ * it has a number. Used when an edit rewrites the source, so it keeps the user's own vocabulary.
+ */
+export function sourceFolder(source: string, fold: (t: Term) => string | null): (t: Term) => string | null {
+  const code = source.replace(/(--|\/\/|#).*$/gm, '');
+  const used = new Set(code.match(/[\p{L}_][\p{L}\p{N}_'₀-₉]*/gu) ?? []);
+  const numerals = /(^|[^\p{L}\p{N}_])\d/u.test(code);
+  return (t) => {
+    const r = fold(t);
+    if (r === null) return null;
+    return (/^\d+$/.test(r) ? numerals : used.has(r)) ? r : null;
+  };
+}
+
 /** A definition name that is valid and not taken. */
 export function freshName(base: string, taken: ReadonlySet<string>): string {
   const b = base.toUpperCase().replace(/[^A-Z0-9_]/g, '') || 'DEF';

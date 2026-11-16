@@ -1,6 +1,6 @@
 // λ-term → truth table → canonical DNF / CNF and a minimal sum of products (Quine–McCluskey).
 
-import { type Term, apps, size } from '../term';
+import { type Term, apps } from '../term';
 import { churchTrue, churchFalse, decodeBool } from '../encodings';
 import { normalize } from '../nbe';
 
@@ -39,7 +39,7 @@ export function truthTable(t: Term, n: number, names: string[], fuel = 200_000):
     const r = normalize(apps(t, ...inputs.map((b) => (b ? churchTrue : churchFalse))), fuel);
     let out: boolean | null = null, note: string | undefined;
     if (r.status !== 'normal' || !r.term) note = r.status === 'fuel' ? 'no normal form within the limit' : r.message ?? 'error';
-    else { out = decodeBool(r.term); if (out === null) note = size(r.term) < 40 ? 'not a Boolean' : 'not a Boolean'; }
+    else { out = decodeBool(r.term); if (out === null) note = 'not a Boolean'; }
     if (out === null) complete = false;
     rows.push({ inputs, out, note });
   }

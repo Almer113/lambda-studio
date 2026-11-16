@@ -314,6 +314,8 @@ export interface DefSource {
   span?: Span;
   term?: Term;
   error?: string;
+  /** where the error is (in the definition, or in a definition it uses) */
+  errorSpan?: Span;
   recursive?: boolean;
   state?: 'resolving' | 'done';
 }
@@ -330,7 +332,7 @@ export class Resolver {
   resolveDef(name: string): Term {
     const d = this.defs.get(name)!;
     if (d.state === 'done') {
-      if (d.error) throw new ParseError(`'${name}' has an error: ${d.error}`, 0, 0);
+      if (d.error) throw new ParseError(d.error, d.errorSpan!.from, d.errorSpan!.to);
       return d.term!;
     }
     if (d.state === 'resolving') throw new RecursionMarker(name);
@@ -349,8 +351,8 @@ export class Resolver {
       d.error = e instanceof RecursionMarker
         ? `mutual recursion with '${e.target}' is not supported (only direct self-reference is turned into Y)`
         : e instanceof ParseError ? e.message : String(e);
-      if (e instanceof ParseError && e.from + e.to > 0) throw e;
-      throw new ParseError(d.error, d.node.from, d.node.to);
+      d.errorSpan = e instanceof ParseError && e.from + e.to > 0 ? { from: e.from, to: e.to } : { from: d.node.from, to: d.node.to };
+      throw new ParseError(d.error, d.errorSpan.from, d.errorSpan.to);
     }
   }
 

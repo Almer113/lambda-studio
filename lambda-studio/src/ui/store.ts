@@ -7,7 +7,7 @@ import { ALGORITHMS } from '../core/combinators';
 import type { WorkerRequest, WorkerResponse } from '../worker/eval.worker';
 import EvalWorker from '../worker/eval.worker?worker&inline';
 import type { Algorithm } from '../core/combinators';
-import { applyEdit, rewriteSource, ACTIONS, type EditAction } from '../core/edit';
+import { applyEdit, rewriteSource, sourceFolder, ACTIONS, type EditAction } from '../core/edit';
 import { printNamed } from '../core/formats/named';
 import { makeFolder } from '../core/fold';
 import { getAt } from '../core/term';
@@ -282,7 +282,9 @@ export const useStore = create<State>((set, get) => {
       if (!term) return 'No term';
       const next = applyEdit(term, p, action, arg, name);
       if (!next) return 'This action does not apply here';
-      const fold = st.settings.foldNames ? makeFolder(st.program.foldTable, { numerals: st.settings.numerals, zeroAs: st.settings.zeroAs }) : undefined;
+      // The rewritten source folds only names (and numerals) the source already uses: folding in
+      // other library names would change what the user wrote (λx.λx.x x must not come back as λx.ω).
+      const fold = st.settings.foldNames ? sourceFolder(st.source, makeFolder(st.program.foldTable, { numerals: st.settings.numerals, zeroAs: st.settings.zeroAs })) : undefined;
       const avoid = new Set([...st.program.foldTable.names, ...(name ? [name] : [])]);
       const newDefs = action === 'fold' && name ? [{ name, body: printNamed(getAt(term, p), { fold, avoid }).text }] : [];
       const named = st.program.format === 'named' || st.program.format === 'haskell';

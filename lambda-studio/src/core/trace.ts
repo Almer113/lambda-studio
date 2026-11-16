@@ -44,7 +44,7 @@ export function markdownSummary(source: string, start: Term, result: Term, steps
   if (result !== start) lines.push('', `**After ${steps} step${steps === 1 ? '' : 's'}:** \`${printNamed(result, opts).text}\``);
   const d = describe(result);
   if (d.length) lines.push('', `**Value:** ${d.map((x) => x.text).join(' · ')}`);
-  try { lines.push('', `**BLC (${encodeBLC(result).length} bits):** \`${encodeBLC(result)}\``); } catch { /* free variables */ }
+  try { const bits = encodeBLC(result); lines.push('', `**BLC (${bits.length} bits):** \`${bits}\``); } catch { /* free variables */ }
   if (size(result) < 1500) lines.push('', '**Tromp diagram:**', '', '```', toBoxChars(layout(result)), '```');
   return lines.join('\n') + '\n';
 }
