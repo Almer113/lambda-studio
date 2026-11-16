@@ -2,6 +2,7 @@
 // and the combinator-based notations (SKI strings, Unlambda, Iota, Jot, binary CL, Lazy K).
 
 import { type Term, app, lam, v, free, lams, apps } from './term';
+import { run, call, type Rec } from './trampoline';
 
 // ---------------------------------------------------------------------------
 // Representation
@@ -326,13 +327,13 @@ export function parseSKI(src: string): CL {
       return;
     }
   };
-  const atom = (): CL | null => {
+  function* atom(): Rec<CL | null> {
     skip();
     if (i >= src.length) return null;
     const c = src[i];
     if (c === '(') {
       const start = i; i++;
-      const e = seq();
+      const e = yield* call(seq());
       skip();
       if (src[i] !== ')') throw new ParseFail("Expected ')'", start, i);
       i++;
@@ -357,17 +358,17 @@ export function parseSKI(src: string): CL {
       return { t: 'f', n: word };
     }
     return null;
-  };
-  const seq = (): CL | null => {
+  }
+  function* seq(): Rec<CL | null> {
     let e: CL | null = null;
     for (;;) {
       const save = i;
-      const a = atom();
+      const a = yield* call(atom());
       if (!a) { i = save; return e; }
       e = e ? A(e, a) : a;
     }
-  };
-  const e = seq();
+  }
+  const e = run(seq());
   skip();
   if (i < src.length) throw new ParseFail(`Unexpected '${src[i]}'`, i, i + 1);
   if (!e) throw new ParseFail('Empty input', 0, src.length);
@@ -384,17 +385,17 @@ function parsePrefix(src: string, appChar: string, atoms: Record<string, CL>, na
       return;
     }
   };
-  const go = (): CL => {
+  function* go(): Rec<CL> {
     skip();
     if (i >= src.length) throw new ParseFail(`${name}: unexpected end of input`, src.length, src.length);
     const c = src[i];
-    if (c === appChar) { i++; const f = go(); const a = go(); return A(f, a); }
+    if (c === appChar) { i++; const f = yield* call(go()); const a = yield* call(go()); return A(f, a); }
     const at = atoms[c];
     if (!at) throw new ParseFail(`${name}: unexpected '${c}'`, i, i + 1);
     i++;
     return at;
-  };
-  const e = go();
+  }
+  const e = run(go());
   skip();
   if (i < src.length) throw new ParseFail(`${name}: trailing input`, i, src.length);
   return e;
@@ -421,15 +422,15 @@ export function parseBCL(src: string): CL {
   const bits: { b: string; at: number }[] = [];
   for (let i = 0; i < src.length; i++) if (src[i] === '0' || src[i] === '1') bits.push({ b: src[i], at: i }); else if (!/\s/.test(src[i])) throw new ParseFail(`Unexpected '${src[i]}'`, i, i + 1);
   let k = 0;
-  const go = (): CL => {
+  function* go(): Rec<CL> {
     if (k >= bits.length) throw new ParseFail('Binary CL: unexpected end of input', src.length, src.length);
-    if (bits[k].b === '1') { k++; const f = go(); const a = go(); return A(f, a); }
+    if (bits[k].b === '1') { k++; const f = yield* call(go()); const a = yield* call(go()); return A(f, a); }
     if (k + 1 >= bits.length) throw new ParseFail('Binary CL: unexpected end of input', src.length, src.length);
     const r = bits[k + 1].b === '0' ? K : S;
     k += 2;
     return r;
-  };
-  const e = go();
+  }
+  const e = run(go());
   if (k < bits.length) throw new ParseFail(`Binary CL: ${bits.length - k} trailing bit(s)`, bits[k].at, src.length);
   return e;
 }

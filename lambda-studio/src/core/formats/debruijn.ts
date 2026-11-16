@@ -1,7 +1,8 @@
 // De Bruijn index notation, 0- or 1-based:  λλ1 (1 0)   or Tromp style  λλ2 (2 1)
 
 import { type Term, type Path, app, lam, v, free, maxFree } from '../term';
-import { ParseError, type Printed, type Span } from './named';
+import { ParseError, SPAN_PATH_LIMIT, type Printed, type Span } from './named';
+import { run, call, type Rec } from '../trampoline';
 
 interface SpanTree { from: number; to: number; kids: SpanTree[] }
 interface Parsed { t: Term; s: SpanTree }
@@ -18,30 +19,30 @@ export function parseDeBruijn(src: string, base: 0 | 1, spans?: Map<Path, Span>)
   const peek = () => { skip(); return src[i] as string | undefined; };
   const isLam = (c: string | undefined) => c === 'λ' || c === '\\';
 
-  const expr = (): Parsed => {
+  function* expr(): Rec<Parsed> {
     if (isLam(peek())) {
       const from = i;
       i++;
       if (peek() === '.') i++;
-      const body = expr();
+      const body = yield* call(expr());
       return { t: lam(body.t), s: { from, to: body.s.to, kids: [body.s] } };
     }
-    let acc = atom();
+    let acc = yield* call(atom());
     for (;;) {
       const d = peek();
       if (d === undefined || d === ')') break;
-      const arg = isLam(d) ? expr() : atom();
+      const arg = yield* call(isLam(d) ? expr() : atom());
       acc = { t: app(acc.t, arg.t), s: { from: acc.s.from, to: arg.s.to, kids: [acc.s, arg.s] } };
       if (isLam(d)) break;
     }
     return acc;
-  };
-  const atom = (): Parsed => {
+  }
+  function* atom(): Rec<Parsed> {
     const c = peek();
     const from = i;
     if (c === '(') {
       i++;
-      const e = expr();
+      const e = yield* call(expr());
       if (peek() !== ')') throw new ParseError("Expected ')'", i, i + 1);
       i++;
       return { t: e.t, s: { ...e.s, from, to: i } };
@@ -60,17 +61,19 @@ export function parseDeBruijn(src: string, base: 0 | 1, spans?: Map<Path, Span>)
       return { t: free(name), s: { from, to: i, kids: [] } };
     }
     throw new ParseError(c === undefined ? 'Unexpected end of input' : `Unexpected '${c}'`, i, i + 1);
-  };
-  const r = expr();
+  }
+  const r = run(expr());
   skip();
   if (i < src.length) throw new ParseError(`Unexpected '${src[i]}'`, i, i + 1);
   if (spans) {
-    const walk = (t: Term, s: SpanTree, p: Path) => {
+    const todo: [Term, SpanTree, Path][] = [[r.t, r.s, '']];
+    while (todo.length) {
+      const [t, s, p] = todo.pop()!;
+      if (p.length > SPAN_PATH_LIMIT) continue;
       spans.set(p, { from: s.from, to: s.to });
-      if (t.tag === 'lam') walk(t.body, s.kids[0], p + 'b');
-      else if (t.tag === 'app') { walk(t.fn, s.kids[0], p + 'f'); walk(t.arg, s.kids[1], p + 'a'); }
-    };
-    walk(r.t, r.s, '');
+      if (t.tag === 'lam') todo.push([t.body, s.kids[0], p + 'b']);
+      else if (t.tag === 'app') todo.push([t.arg, s.kids[1], p + 'a'], [t.fn, s.kids[0], p + 'f']);
+    }
   }
   return r.t;
 }

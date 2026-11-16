@@ -8,6 +8,7 @@
 import { type Term } from '../term';
 import { type Normalized } from './latex';
 import { NameScope, collectFreeNames } from './names';
+import { run, type Rec } from '../trampoline';
 
 export type CodeLang = 'haskell' | 'js' | 'python' | 'lisp' | 'wolfram';
 
@@ -181,54 +182,54 @@ export function codeToNamed(src: string, lang: CodeLang): Normalized {
   // ---- per-language expression grammars (emit fully parenthesised named notation)
   const lamOpen = (names: Tok[], at: Tok) => { out.put('(λ', at.from, at.to); names.forEach((n, j) => { if (j) out.put(' ', n.from, n.from); emitId(n); }); out.put('.', at.from, at.to); };
 
-  const exprJS = (): void => {
+  function* exprJS(): Rec<void> {
     // arrow functions: x => e | (x, y) => e
-    if (peek()?.k === 'id' && isSym('=>', 1)) { const x = ident(); const arrow = expect('=>'); lamOpen([x], arrow); exprJS(); out.put(')', arrow.from, arrow.to); return; }
+    if (peek()?.k === 'id' && isSym('=>', 1)) { const x = ident(); const arrow = expect('=>'); lamOpen([x], arrow); yield exprJS(); out.put(')', arrow.from, arrow.to); return; }
     if (isSym('(')) {
       let j = 1; const names: Tok[] = [];
       while (peek(j)?.k === 'id') { names.push(peek(j)); j++; if (peek(j)?.k === 'sym' && peek(j).s === ',') j++; else break; }
       if (peek(j)?.k === 'sym' && peek(j).s === ')' && peek(j + 1)?.k === 'sym' && peek(j + 1).s === '=>') {
         k += j + 1; const arrow = expect('=>');
         if (!names.length) err('Functions need at least one parameter');
-        lamOpen(names, arrow); exprJS(); out.put(')', arrow.from, arrow.to); return;
+        lamOpen(names, arrow); yield exprJS(); out.put(')', arrow.from, arrow.to); return;
       }
     }
-    callLike(exprJS, '(', ')');
+    yield callLike(exprJS, '(', ')');
   };
-  const exprPy = (): void => {
+  function* exprPy(): Rec<void> {
     if (peek()?.k === 'id' && peek().s === 'lambda') {
       const kw = toks[k++]; const names: Tok[] = [ident()];
       while (isSym(',')) { k++; names.push(ident()); }
-      expect(':'); lamOpen(names, kw); exprPy(); out.put(')', kw.from, kw.to); return;
+      expect(':'); lamOpen(names, kw); yield exprPy(); out.put(')', kw.from, kw.to); return;
     }
-    callLike(exprPy, '(', ')');
+    yield callLike(exprPy, '(', ')');
   };
-  const exprWl = (): void => {
+  function* exprWl(): Rec<void> {
     if (peek()?.k === 'id' && peek().s === 'Function' && isSym('[', 1)) {
       const kw = toks[k++]; k++;
       const names: Tok[] = [];
       if (isSym('{')) { k++; names.push(ident()); while (isSym(',')) { k++; names.push(ident()); } expect('}'); } else names.push(ident());
       expect(',');
       const start = out.text.length;
-      lamOpen(names, kw); exprWl(); out.put(')', kw.from, kw.to); expect(']');
-      suffixes(exprWl, '[', ']', start); // Function[x, b][a]
+      lamOpen(names, kw); yield exprWl(); out.put(')', kw.from, kw.to); expect(']');
+      yield suffixes(exprWl, '[', ']', start); // Function[x, b][a]
       return;
     }
-    if (peek()?.k === 'id' && isSym('|->', 1)) { const x = ident(); const arrow = expect('|->'); lamOpen([x], arrow); exprWl(); out.put(')', arrow.from, arrow.to); return; }
-    callLike(exprWl, '[', ']');
+    if (peek()?.k === 'id' && isSym('|->', 1)) { const x = ident(); const arrow = expect('|->'); lamOpen([x], arrow); yield exprWl(); out.put(')', arrow.from, arrow.to); return; }
+    yield callLike(exprWl, '[', ']');
   };
   // primary followed by call suffixes f(a)(b, c), curried: ((f a) b) c
-  const callLike = (expr: () => void, open: string, close: string) => {
+  function* callLike(expr: () => Rec<void>, open: string, close: string): Rec<void> {
     const t = peek();
     if (!t) err('Unexpected end of input');
     const start = out.text.length;
     if (t.k === 'id') { k++; emitId(t); }
     else if (t.k === 'num') { k++; out.put(t.s, t.from, t.to); }
-    else if (t.k === 'sym' && t.s === '(') { const o = toks[k++]; out.put('(', o.from, o.to); expr(); const c = expect(')'); out.put(')', c.from, c.to); }
+    else if (t.k === 'sym' && t.s === '(') { const o = toks[k++]; out.put('(', o.from, o.to); yield expr(); const c = expect(')'); out.put(')', c.from, c.to); }
     else err(`Unexpected '${t.s}'`);
-    suffixes(expr, open, close, start);
+    yield suffixes(expr, open, close, start);
   };
-  const suffixes = (expr: () => void, open: string, close: string, start: number) => {
+  function* suffixes(expr: () => Rec<void>, open: string, close: string, start: number): Rec<void> {
     while (isSym(open)) {
       const o = toks[k++];
       if (isSym(close)) err('Calls need an argument');
@@ -236,7 +237,7 @@ export function codeToNamed(src: string, lang: CodeLang): Normalized {
         // (F A): insert '(' at start, then ' ' A ')'
         insertAt(start, '(', o.from, o.to);
         out.put(' ', o.from, o.to);
-        expr();
+        yield expr();
         out.put(')', o.from, o.to);
         if (isSym(',')) { k++; continue; }
         break;
@@ -250,7 +251,7 @@ export function codeToNamed(src: string, lang: CodeLang): Normalized {
     out.ends.splice(pos, 0, ...Array(s.length).fill(to));
   };
 
-  const exprLisp = (): void => {
+  function* exprLisp(): Rec<void> {
     const t = peek();
     if (!t) err('Unexpected end of input');
     if (t.k === 'id') { k++; emitId(t); return; }
@@ -269,15 +270,15 @@ export function codeToNamed(src: string, lang: CodeLang): Normalized {
         while (peek()?.k === 'id') names.push(ident());
         expect(pclose);
         if (!names.length) err('Functions need at least one parameter');
-        lamOpen(names, h); exprLisp(); out.put(')', h.from, h.to); expect(close); return;
+        lamOpen(names, h); yield exprLisp(); out.put(')', h.from, h.to); expect(close); return;
       }
       // application (f a b ...) — left-nested
       const start = out.text.length;
       if (isSym(close)) err('Empty application');
-      exprLisp();
+      yield exprLisp();
       while (!isSym(close)) {
         if (!peek()) err(`Expected '${close}'`);
-        insertAt(start, '(', o.from, o.to); out.put(' ', o.from, o.to); exprLisp(); out.put(')', o.from, o.to);
+        insertAt(start, '(', o.from, o.to); out.put(' ', o.from, o.to); yield exprLisp(); out.put(')', o.from, o.to);
       }
       k++;
       return;
@@ -297,11 +298,11 @@ export function codeToNamed(src: string, lang: CodeLang): Normalized {
     // definitions
     if (lang === 'js' && t.k === 'id' && (t.s === 'const' || t.s === 'let' || t.s === 'var')) {
       k++; const name = ident(); expect('=');
-      emitId(name); out.put(' = ', name.to, name.to); expr(); continue;
+      emitId(name); out.put(' = ', name.to, name.to); run(expr()); continue;
     }
     if ((lang === 'python' || lang === 'wolfram') && t.k === 'id' && (isSym('=', 1) || isSym(':=', 1))) {
       const name = ident(); k++;
-      emitId(name); out.put(' = ', name.to, name.to); expr(); continue;
+      emitId(name); out.put(' = ', name.to, name.to); run(expr()); continue;
     }
     if (lang === 'lisp' && t.k === 'sym' && t.s === '(' && peek(1)?.k === 'id' && peek(1).s === 'define') {
       const o = toks[k++]; k++;
@@ -310,11 +311,11 @@ export function codeToNamed(src: string, lang: CodeLang): Normalized {
         while (peek()?.k === 'id') names.push(ident());
         expect(')');
         emitId(name); out.put(' = ', name.to, name.to);
-        if (names.length) { lamOpen(names, name); exprLisp(); out.put(')', name.from, name.to); } else exprLisp();
-      } else { const name = ident(); emitId(name); out.put(' = ', name.to, name.to); exprLisp(); }
+        if (names.length) { lamOpen(names, name); run(exprLisp()); out.put(')', name.from, name.to); } else run(exprLisp());
+      } else { const name = ident(); emitId(name); out.put(' = ', name.to, name.to); run(exprLisp()); }
       expect(')'); void o; continue;
     }
-    expr();
+    run(expr());
   }
   return out.done(src.length);
 }

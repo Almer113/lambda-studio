@@ -44,44 +44,59 @@ export function layout(t: Term): Diagram {
   // binders: stack of { row, path } of enclosing λs (innermost last)
   const binders: { row: number; path: Path }[] = [];
 
-  const go = (n: Term, col: number, row: number, path: Path): Box => {
-    switch (n.tag) {
-      case 'var':
-      case 'free': {
-        let top = -1;
-        let binder: Path | null = null;
-        if (n.tag === 'var' && n.i < binders.length) {
-          const b = binders[binders.length - 1 - n.i];
-          top = b.row; binder = b.path;
-        } else hasFree = true;
-        const seg: Segment = { kind: 'var', x1: 4 * col + 1, x2: 4 * col + 1, y1: top, y2: row, path, binder, index: n.tag === 'var' ? n.i : undefined };
-        segments.push(seg);
-        return { w: 1, h: 1, out: seg };
-      }
-      case 'lam': {
-        const bar: Segment = { kind: 'lam', x1: 4 * col, x2: 0, y1: row, y2: row, path };
+  // A loop over an explicit stack of frames (not recursion): terms can be far deeper than the call
+  // stack. `ret` carries a finished subdiagram back to its parent frame.
+  interface Frame { n: Term; col: number; row: number; path: Path; st: number; bar?: Segment; f?: Box }
+  const stack: Frame[] = [{ n: t, col: 0, row: 0, path: '', st: 0 }];
+  let ret: Box = null!;
+  while (stack.length) {
+    const fr = stack[stack.length - 1];
+    const n = fr.n;
+    if (n.tag === 'var' || n.tag === 'free') {
+      let top = -1;
+      let binder: Path | null = null;
+      if (n.tag === 'var' && n.i < binders.length) {
+        const b = binders[binders.length - 1 - n.i];
+        top = b.row; binder = b.path;
+      } else hasFree = true;
+      const seg: Segment = { kind: 'var', x1: 4 * fr.col + 1, x2: 4 * fr.col + 1, y1: top, y2: fr.row, path: fr.path, binder, index: n.tag === 'var' ? n.i : undefined };
+      segments.push(seg);
+      ret = { w: 1, h: 1, out: seg };
+      stack.pop();
+    } else if (n.tag === 'lam') {
+      if (fr.st === 0) {
+        const bar: Segment = { kind: 'lam', x1: 4 * fr.col, x2: 0, y1: fr.row, y2: fr.row, path: fr.path };
         segments.push(bar);
-        binders.push({ row, path });
-        const body = go(n.body, col, row + 2, path + 'b');
+        binders.push({ row: fr.row, path: fr.path });
+        fr.bar = bar; fr.st = 1;
+        stack.push({ n: n.body, col: fr.col, row: fr.row + 2, path: fr.path + 'b', st: 0 });
+      } else {
+        const body = ret;
         binders.pop();
-        bar.x2 = 4 * (col + body.w) - 2;
-        return { w: body.w, h: body.h + 2, out: body.out };
+        fr.bar!.x2 = 4 * (fr.col + body.w) - 2;
+        ret = { w: body.w, h: body.h + 2, out: body.out };
+        stack.pop();
       }
-      case 'app': {
-        const f = go(n.fn, col, row, path + 'f');
-        const a = go(n.arg, col + f.w, row, path + 'a');
-        // As in Tromp's AIT renderer: the link sits on the lower of the two sub-diagrams' last rows,
-        // and the function's line continues two rows below it (the application's own 2 rows).
-        const link = row + Math.max(f.h, a.h) - 1;
-        a.out.y2 = link;
-        segments.push({ kind: 'app', x1: f.out.x1, x2: a.out.x1, y1: link, y2: link, path });
-        f.out.y2 = link + 2;
-        return { w: f.w + a.w, h: Math.max(f.h, a.h) + 2, out: f.out };
-      }
+    } else if (fr.st === 0) {
+      fr.st = 1;
+      stack.push({ n: n.fn, col: fr.col, row: fr.row, path: fr.path + 'f', st: 0 });
+    } else if (fr.st === 1) {
+      fr.f = ret; fr.st = 2;
+      stack.push({ n: n.arg, col: fr.col + ret.w, row: fr.row, path: fr.path + 'a', st: 0 });
+    } else {
+      const f = fr.f!, a = ret, row = fr.row;
+      // As in Tromp's AIT renderer: the link sits on the lower of the two sub-diagrams' last rows,
+      // and the function's line continues two rows below it (the application's own 2 rows).
+      const link = row + Math.max(f.h, a.h) - 1;
+      a.out.y2 = link;
+      segments.push({ kind: 'app', x1: f.out.x1, x2: a.out.x1, y1: link, y2: link, path: fr.path });
+      f.out.y2 = link + 2;
+      ret = { w: f.w + a.w, h: Math.max(f.h, a.h) + 2, out: f.out };
+      stack.pop();
     }
-  };
+  }
 
-  const box = go(t, 0, 0, '');
+  const box = ret;
   return { width: 4 * box.w - 1, height: box.h, top: hasFree ? -1 : 0, segments, vars: box.w };
 }
 
@@ -105,43 +120,57 @@ export function layoutAlternative(t: Term): Diagram {
   /** w: variable columns; bottom: last pixel row used; left/right: anchor lines */
   interface ABox { w: number; bottom: number; left: Segment; right: Segment }
 
-  const go = (n: Term, col: number, row: number, path: Path): ABox => {
-    switch (n.tag) {
-      case 'var':
-      case 'free': {
-        let top = -1;
-        let binder: Path | null = null;
-        if (n.tag === 'var' && n.i < binders.length) {
-          const b = binders[binders.length - 1 - n.i];
-          top = b.row; binder = b.path;
-        } else hasFree = true;
-        const bottom = Math.max(top, row - 2);
-        const seg: Segment = { kind: 'var', x1: 4 * col + 1, x2: 4 * col + 1, y1: top, y2: bottom, path, binder, index: n.tag === 'var' ? n.i : undefined };
-        segments.push(seg);
-        return { w: 1, bottom, left: seg, right: seg };
-      }
-      case 'lam': {
-        const bar: Segment = { kind: 'lam', x1: 4 * col, x2: 0, y1: row, y2: row, path };
+  // explicit frame stack, as in layout()
+  interface Frame { n: Term; col: number; row: number; path: Path; st: number; bar?: Segment; f?: ABox }
+  const stack: Frame[] = [{ n: t, col: 0, row: 0, path: '', st: 0 }];
+  let ret: ABox = null!;
+  while (stack.length) {
+    const fr = stack[stack.length - 1];
+    const n = fr.n;
+    if (n.tag === 'var' || n.tag === 'free') {
+      let top = -1;
+      let binder: Path | null = null;
+      if (n.tag === 'var' && n.i < binders.length) {
+        const b = binders[binders.length - 1 - n.i];
+        top = b.row; binder = b.path;
+      } else hasFree = true;
+      const bottom = Math.max(top, fr.row - 2);
+      const seg: Segment = { kind: 'var', x1: 4 * fr.col + 1, x2: 4 * fr.col + 1, y1: top, y2: bottom, path: fr.path, binder, index: n.tag === 'var' ? n.i : undefined };
+      segments.push(seg);
+      ret = { w: 1, bottom, left: seg, right: seg };
+      stack.pop();
+    } else if (n.tag === 'lam') {
+      if (fr.st === 0) {
+        const bar: Segment = { kind: 'lam', x1: 4 * fr.col, x2: 0, y1: fr.row, y2: fr.row, path: fr.path };
         segments.push(bar);
-        binders.push({ row, path });
-        const body = go(n.body, col, row + 2, path + 'b');
+        binders.push({ row: fr.row, path: fr.path });
+        fr.bar = bar; fr.st = 1;
+        stack.push({ n: n.body, col: fr.col, row: fr.row + 2, path: fr.path + 'b', st: 0 });
+      } else {
+        const body = ret;
         binders.pop();
-        bar.x2 = 4 * (col + body.w) - 2;
-        return { ...body, bottom: Math.max(body.bottom, row) };
+        fr.bar!.x2 = 4 * (fr.col + body.w) - 2;
+        ret = { ...body, bottom: Math.max(body.bottom, fr.row) };
+        stack.pop();
       }
-      case 'app': {
-        const f = go(n.fn, col, row, path + 'f');
-        const a = go(n.arg, col + f.w, row, path + 'a');
-        const link = Math.max(f.bottom, a.bottom) + 2;
-        f.right.y2 = link;
-        a.left.y2 = link;
-        segments.push({ kind: 'app', x1: f.right.x1, x2: a.left.x1, y1: link, y2: link, path });
-        return { w: f.w + a.w, bottom: link, left: f.right, right: a.left };
-      }
+    } else if (fr.st === 0) {
+      fr.st = 1;
+      stack.push({ n: n.fn, col: fr.col, row: fr.row, path: fr.path + 'f', st: 0 });
+    } else if (fr.st === 1) {
+      fr.f = ret; fr.st = 2;
+      stack.push({ n: n.arg, col: fr.col + ret.w, row: fr.row, path: fr.path + 'a', st: 0 });
+    } else {
+      const f = fr.f!, a = ret;
+      const link = Math.max(f.bottom, a.bottom) + 2;
+      f.right.y2 = link;
+      a.left.y2 = link;
+      segments.push({ kind: 'app', x1: f.right.x1, x2: a.left.x1, y1: link, y2: link, path: fr.path });
+      ret = { w: f.w + a.w, bottom: link, left: f.right, right: a.left };
+      stack.pop();
     }
-  };
+  }
 
-  const box = go(t, 0, 0, '');
+  const box = ret;
   return { width: 4 * box.w - 1, height: box.bottom + 1, top: hasFree ? -1 : 0, segments, vars: box.w };
 }
 

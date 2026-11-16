@@ -2,6 +2,7 @@
 
 import { type Term, app, lam, v } from '../term';
 import { ParseError } from './named';
+import { run, call, type Rec } from '../trampoline';
 
 export function encodeBLC(t: Term): string {
   const parts: string[] = [];
@@ -47,23 +48,23 @@ export function decodeBLC(src: string): BLCDecode {
     const at = offsets[Math.min(i, offsets.length - 1)] ?? 0;
     throw new ParseError(msg, at, at + 1);
   };
-  const parse = (): Term => {
+  function* parse(): Rec<Term> {
     if (i >= bits.length) err('Unexpected end of bits');
     if (bits[i] === '0') {
       if (i + 1 >= bits.length) err('Unexpected end of bits');
       const b = bits[i + 1];
       i += 2;
-      if (b === '0') return lam(parse());
-      const f = parse();
-      return app(f, parse());
+      if (b === '0') return lam(yield* call(parse()));
+      const f = yield* call(parse());
+      return app(f, yield* call(parse()));
     }
     let n = 0;
     while (i < bits.length && bits[i] === '1') { n++; i++; }
     if (i >= bits.length) err('Variable not terminated by 0');
     i++;
     return v(n - 1);
-  };
-  const term = parse();
+  }
+  const term = run(parse());
   return { term, used: i, trailing: bits.length - i };
 }
 

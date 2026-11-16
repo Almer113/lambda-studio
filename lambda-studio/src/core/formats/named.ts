@@ -104,78 +104,118 @@ class Parser {
       return [...w].map((ch, j) => ({ name: ch, from: tok.from + j, to: tok.from + j + 1 }));
     return [{ name: w, from: tok.from, to: tok.to }];
   }
+  /**
+   * expr := λ params . expr | let id = expr in expr | (atom | λ… | let…)+
+   * atom := id | num | str | ( expr ) | [ expr, … ]
+   * Parsed with an explicit stack of open constructs, so nesting depth is not limited by the call stack.
+   */
   expr(): SNode {
-    const tok = this.peek();
-    if (!tok) throw new ParseError('Expected an expression', this.end, this.end);
-    if (tok.kind === 'lam') return this.lambda();
-    if (tok.kind === 'let') return this.letExpr();
-    return this.application();
-  }
-  lambda(): SNode {
-    const l = this.next();
-    const params: { name: string; from: number; to: number }[] = [];
-    while (this.peek()?.kind === 'id') params.push(...this.splitWord(this.next()));
-    if (params.length === 0) {
-      const tok = this.peek();
-      throw new ParseError('Expected a variable name after λ', tok?.from ?? this.end, tok?.to ?? this.end);
-    }
-    this.expect('dot', "'.' after the λ parameters");
-    const body = this.expr();
-    return { k: 'lam', params, body, from: l.from, to: body.to };
-  }
-  letExpr(): SNode {
-    const l = this.next();
-    const name = this.expect('id', 'a name after let');
-    this.expect('eq', "'=' in let");
-    const value = this.expr();
-    this.expect('in', "'in' after the let value");
-    const body = this.expr();
-    return { k: 'let', name: name.text, value, body, from: l.from, to: body.to };
-  }
-  application(): SNode {
-    let fn: SNode | null = null;
+    type Frame =
+      | { k: 'app'; fn: SNode | null; last: boolean }
+      | { k: 'lam'; from: number; params: { name: string; from: number; to: number }[] }
+      | { k: 'letValue'; from: number; name: string }
+      | { k: 'letBody'; from: number; name: string; value: SNode }
+      | { k: 'paren'; from: number }
+      | { k: 'list'; from: number; items: SNode[] };
+    const stack: Frame[] = [];
+    let mode: 'expr' | 'item' | 'deliver' = 'expr';
+    let result: SNode | null = null;
     for (;;) {
-      const tok = this.peek();
-      if (!tok || tok.kind === 'rp' || tok.kind === 'rb' || tok.kind === 'comma' || tok.kind === 'in') break;
-      let arg: SNode;
-      if (tok.kind === 'lam' || tok.kind === 'let') arg = this.expr();
-      else arg = this.atom();
-      fn = fn ? { k: 'app', fn, arg, from: fn.from, to: arg.to } : arg;
-      if (tok.kind === 'lam' || tok.kind === 'let') break;
-    }
-    if (!fn) {
-      const tok = this.peek();
-      throw new ParseError(tok ? `Unexpected '${tok.text}'` : 'Expected an expression', tok?.from ?? this.end, tok?.to ?? this.end);
-    }
-    return fn;
-  }
-  atom(): SNode {
-    const tok = this.next();
-    switch (tok.kind) {
-      case 'id': {
-        const parts = this.splitWord(tok);
-        let node: SNode = { k: 'id', ...parts[0] };
-        for (const p of parts.slice(1)) node = { k: 'app', fn: node, arg: { k: 'id', ...p }, from: node.from, to: p.to };
-        return node;
-      }
-      case 'num': return { k: 'num', n: Number(tok.text), from: tok.from, to: tok.to };
-      case 'str': return { k: 'str', s: tok.text.slice(1, -1), from: tok.from, to: tok.to };
-      case 'lp': {
-        const e = this.expr();
-        const r = this.expect('rp', "')'");
-        return { ...e, from: tok.from, to: r.to } as SNode;
-      }
-      case 'lb': {
-        const items: SNode[] = [];
-        if (this.peek()?.kind !== 'rb') {
-          items.push(this.expr());
-          while (this.peek()?.kind === 'comma') { this.next(); items.push(this.expr()); }
+      if (mode === 'expr') {
+        const tok = this.peek();
+        if (!tok) throw new ParseError('Expected an expression', this.end, this.end);
+        if (tok.kind === 'lam') {
+          const l = this.next();
+          const params: { name: string; from: number; to: number }[] = [];
+          while (this.peek()?.kind === 'id') params.push(...this.splitWord(this.next()));
+          if (params.length === 0) {
+            const t = this.peek();
+            throw new ParseError('Expected a variable name after λ', t?.from ?? this.end, t?.to ?? this.end);
+          }
+          this.expect('dot', "'.' after the λ parameters");
+          stack.push({ k: 'lam', from: l.from, params });
+        } else if (tok.kind === 'let') {
+          const l = this.next();
+          const name = this.expect('id', 'a name after let');
+          this.expect('eq', "'=' in let");
+          stack.push({ k: 'letValue', from: l.from, name: name.text });
+        } else {
+          stack.push({ k: 'app', fn: null, last: false });
+          mode = 'item';
         }
-        const r = this.expect('rb', "']'");
-        return { k: 'list', items, from: tok.from, to: r.to };
+        continue;
       }
-      default:
-        throw new ParseError(`Unexpected '${tok.text}'`, tok.from, tok.to);
+      if (mode === 'item') {
+        // the top frame is an application collecting its items
+        const f = stack[stack.length - 1] as { k: 'app'; fn: SNode | null; last: boolean };
+        const tok = this.peek();
+        if (!tok || tok.kind === 'rp' || tok.kind === 'rb' || tok.kind === 'comma' || tok.kind === 'in') {
+          if (!f.fn) throw new ParseError(tok ? `Unexpected '${tok.text}'` : 'Expected an expression', tok?.from ?? this.end, tok?.to ?? this.end);
+          stack.pop();
+          result = f.fn; mode = 'deliver';
+          continue;
+        }
+        if (tok.kind === 'lam' || tok.kind === 'let') { f.last = true; mode = 'expr'; continue; } // a λ or let extends to the end
+        this.next();
+        switch (tok.kind) {
+          case 'id': {
+            const parts = this.splitWord(tok);
+            let node: SNode = { k: 'id', ...parts[0] };
+            for (const q of parts.slice(1)) node = { k: 'app', fn: node, arg: { k: 'id', ...q }, from: node.from, to: q.to };
+            result = node; mode = 'deliver';
+            break;
+          }
+          case 'num': result = { k: 'num', n: Number(tok.text), from: tok.from, to: tok.to }; mode = 'deliver'; break;
+          case 'str': result = { k: 'str', s: tok.text.slice(1, -1), from: tok.from, to: tok.to }; mode = 'deliver'; break;
+          case 'lp': stack.push({ k: 'paren', from: tok.from }); mode = 'expr'; break;
+          case 'lb':
+            if (this.peek()?.kind === 'rb') { const r = this.next(); result = { k: 'list', items: [], from: tok.from, to: r.to }; mode = 'deliver'; }
+            else { stack.push({ k: 'list', from: tok.from, items: [] }); mode = 'expr'; }
+            break;
+          default:
+            throw new ParseError(`Unexpected '${tok.text}'`, tok.from, tok.to);
+        }
+        continue;
+      }
+      // deliver `result` to the innermost open construct
+      const node: SNode = result!;
+      const f = stack[stack.length - 1];
+      if (!f) return node;
+      switch (f.k) {
+        case 'app':
+          f.fn = f.fn ? { k: 'app', fn: f.fn, arg: node, from: f.fn.from, to: node.to } : node;
+          if (f.last) { stack.pop(); result = f.fn; } else mode = 'item';
+          break;
+        case 'lam':
+          stack.pop();
+          result = { k: 'lam', params: f.params, body: node, from: f.from, to: node.to };
+          break;
+        case 'letValue':
+          stack.pop();
+          this.expect('in', "'in' after the let value");
+          stack.push({ k: 'letBody', from: f.from, name: f.name, value: node });
+          mode = 'expr';
+          break;
+        case 'letBody':
+          stack.pop();
+          result = { k: 'let', name: f.name, value: f.value, body: node, from: f.from, to: node.to };
+          break;
+        case 'paren': {
+          stack.pop();
+          const r = this.expect('rp', "')'");
+          result = { ...node, from: f.from, to: r.to } as SNode;
+          break;
+        }
+        case 'list':
+          f.items.push(node);
+          if (this.peek()?.kind === 'comma') { this.next(); mode = 'expr'; }
+          else {
+            const r = this.expect('rb', "']'");
+            stack.pop();
+            result = { k: 'list', items: f.items, from: f.from, to: r.to };
+          }
+          break;
+      }
     }
   }
 }
@@ -314,55 +354,78 @@ export class Resolver {
     }
   }
 
-  /** scope: innermost name last. spans: optional map filled with path -> source span. */
-  resolve(n: SNode, scope: string[], path: Path, spans: Map<Path, Span> | null): Term {
-    spans?.set(path, { from: n.from, to: n.to });
-    switch (n.k) {
-      case 'id': {
-        const idx = scope.lastIndexOf(n.name);
-        if (idx >= 0) return v(scope.length - 1 - idx);
-        if (this.defs.has(n.name)) {
-          try { return this.resolveDef(n.name); }
-          catch (e) {
-            if (e instanceof RecursionMarker) throw e;
-            if (e instanceof ParseError) throw new ParseError(e.message.startsWith(`'${n.name}'`) ? e.message : `In '${n.name}': ${e.message}`, n.from, n.to);
-            throw e;
+  /** scope: innermost name last. spans: optional map filled with path -> source span (up to a
+   *  path length of SPAN_PATH_LIMIT: keys longer than that cost more than they are worth).
+   *  Iterative (an explicit task stack), so the depth of the term is not limited by the call stack. */
+  resolve(n0: SNode, scope0: string[], path0: Path, spans: Map<Path, Span> | null): Term {
+    const scope = [...scope0];
+    const out: Term[] = [];
+    const tasks: (() => void)[] = [];
+    const visit = (n: SNode, path: Path) => {
+      if (spans && path.length <= SPAN_PATH_LIMIT) spans.set(path, { from: n.from, to: n.to });
+      switch (n.k) {
+        case 'id': {
+          const idx = scope.lastIndexOf(n.name);
+          if (idx >= 0) { out.push(v(scope.length - 1 - idx)); return; }
+          if (this.defs.has(n.name)) {
+            try { out.push(this.resolveDef(n.name)); return; }
+            catch (e) {
+              if (e instanceof RecursionMarker) throw e;
+              if (e instanceof ParseError) throw new ParseError(e.message.startsWith(`'${n.name}'`) ? e.message : `In '${n.name}': ${e.message}`, n.from, n.to);
+              throw e;
+            }
           }
+          out.push(free(n.name));
+          return;
         }
-        return free(n.name);
+        case 'num':
+          if (n.n > MAX_NUMERAL) throw new ParseError(`Numeral too large (max ${MAX_NUMERAL})`, n.from, n.to);
+          out.push(churchNumeral(n.n));
+          return;
+        case 'str':
+          out.push(churchList([...n.s].map((ch) => churchNumeral(Math.min(ch.codePointAt(0)!, MAX_NUMERAL)))));
+          return;
+        case 'lam': {
+          let pth = path;
+          for (let k = 0; k < n.params.length; k++) pth += 'b';
+          // record spans for nested lambdas made from a multi-parameter binder
+          if (spans && pth.length <= SPAN_PATH_LIMIT) { let q = path; for (let k = 1; k < n.params.length; k++) { q += 'b'; spans.set(q, { from: n.params[k].from, to: n.to }); } }
+          for (const p of n.params) scope.push(p.name);
+          tasks.push(() => {
+            let body = out.pop()!;
+            for (let k = n.params.length - 1; k >= 0; k--) body = lam(body, n.params[k].name);
+            scope.length -= n.params.length;
+            out.push(body);
+          });
+          tasks.push(() => visit(n.body, pth));
+          return;
+        }
+        case 'app':
+          tasks.push(() => { const a = out.pop()!, f = out.pop()!; out.push(app(f, a)); });
+          tasks.push(() => visit(n.arg, path + 'a'));
+          tasks.push(() => visit(n.fn, path + 'f'));
+          return;
+        case 'list': {
+          const m = n.items.length;
+          tasks.push(() => out.push(churchList(out.splice(out.length - m, m))));
+          for (let k = m - 1; k >= 0; k--) tasks.push(() => visit(n.items[k], path + 'bb' + 'a'.repeat(k) + 'fa'));
+          return;
+        }
+        case 'let':
+          tasks.push(() => { const body = out.pop()!, value = out.pop()!; scope.pop(); out.push(app(lam(body, n.name), value)); });
+          tasks.push(() => { scope.push(n.name); visit(n.body, path + 'fb'); });
+          tasks.push(() => visit(n.value, path + 'a'));
+          return;
       }
-      case 'num':
-        if (n.n > MAX_NUMERAL) throw new ParseError(`Numeral too large (max ${MAX_NUMERAL})`, n.from, n.to);
-        return churchNumeral(n.n);
-      case 'str': {
-        const codes = [...n.s].map((ch) => churchNumeral(Math.min(ch.codePointAt(0)!, MAX_NUMERAL)));
-        return churchList(codes);
-      }
-      case 'lam': {
-        let inner = scope;
-        for (const p of n.params) inner = [...inner, p.name];
-        let pth = path;
-        for (let k = 0; k < n.params.length; k++) pth += 'b';
-        // record spans for nested lambdas made from a multi-parameter binder
-        if (spans) { let q = path; for (let k = 1; k < n.params.length; k++) { q += 'b'; spans.set(q, { from: n.params[k].from, to: n.to }); } }
-        let body = this.resolve(n.body, inner, pth, spans);
-        for (let k = n.params.length - 1; k >= 0; k--) body = lam(body, n.params[k].name);
-        return body;
-      }
-      case 'app':
-        return app(this.resolve(n.fn, scope, path + 'f', spans), this.resolve(n.arg, scope, path + 'a', spans));
-      case 'list': {
-        const items = n.items.map((it, k) => this.resolve(it, scope, path + 'bb' + 'a'.repeat(k) + 'fa', spans));
-        return churchList(items);
-      }
-      case 'let': {
-        const value = this.resolve(n.value, scope, path + 'a', spans);
-        const body = this.resolve(n.body, [...scope, n.name], path + 'fb', spans);
-        return app(lam(body, n.name), value);
-      }
-    }
+    };
+    visit(n0, path0);
+    while (tasks.length) tasks.pop()!();
+    return out.pop()!;
   }
 }
+
+/** Source spans are recorded only for paths up to this length (see Resolver.resolve). */
+export const SPAN_PATH_LIMIT = 4096;
 
 class RecursionMarker extends Error { constructor(public target: string) { super(`recursion:${target}`); } }
 
