@@ -7,6 +7,7 @@ import { useFolder } from './panels';
 import { TexView } from './Tex';
 import { MathField } from './MathField';
 import { type Term, size } from '../core/term';
+import { termKind } from '../core/algebra/kind';
 import { parseProgram } from '../core/program';
 import { printNamed } from '../core/formats/named';
 import { parseExpr, exprToLambda, exprToTex, evalExpr, typeOf, ExprError } from '../core/algebra/expr';
@@ -22,34 +23,59 @@ import ToolsWorker from '../worker/tools.worker?worker&inline';
 import type { BBResult } from '../core/generate';
 import { NumberField } from './NumberField';
 import { FileInput, TextCursorInput, ListPlus, Dices, Sigma, Table, Hash, Equal, Boxes } from 'lucide-react';
-import { TabList, TabPanel, type TabDef } from './Tabs';
+import type { TabDef } from './Tabs';
 import { insertIntoSource } from './Toast';
 import { ExampleMenu } from './Popover';
 import { IconButton, CopyButton } from './IconButton';
 
 const TABS: TabDef<ToolsTab>[] = [
-  { id: 'expr', label: 'Expression', icon: Sigma, title: 'Expression → λ: arithmetic and Boolean expressions as λ-terms' },
-  { id: 'truth', label: 'Truth table', icon: Table, title: 'Truth table, DNF/CNF and a minimal formula of the current term' },
-  { id: 'table', label: 'Numbers', icon: Hash, title: 'Number table: values of the current term on Church numerals, with a guessed closed form' },
-  { id: 'laws', label: 'Laws', icon: Equal, title: 'Check an equation between two terms (βη)' },
-  { id: 'data', label: 'Data types', icon: Boxes, title: 'Church, Scott and Parigot encodings of a data type declaration' },
-  { id: 'generate', label: 'Generate', icon: Dices, title: 'Count, sample and enumerate closed terms; the BBλ explorer' },
+  { id: 'expr', label: 'Expression → λ', icon: Sigma, title: 'Arithmetic and Boolean expressions as λ-terms.' },
+  { id: 'truth', label: 'Truth table', icon: Table, title: 'Truth table, DNF/CNF and a minimal formula of the current term.' },
+  { id: 'table', label: 'Number table', icon: Hash, title: 'The current term on Church numerals, with a guessed closed form.' },
+  { id: 'laws', label: 'Laws', icon: Equal, title: 'Check an equation between two terms (βη).' },
+  { id: 'data', label: 'Data types', icon: Boxes, title: 'Church, Scott and Parigot encodings of a data type declaration.' },
+  { id: 'generate', label: 'Generate', icon: Dices, title: 'Count, sample and enumerate closed terms; the BBλ explorer.' },
 ];
+
+/** When the open tool does not suit the term, point at the one that does. */
+function ToolHint({ tab }: { tab: ToolsTab }) {
+  const term = useStore(currentTerm);
+  const setSetting = useStore((s) => s.setSetting);
+  const kind = useMemo(() => (term && (tab === 'truth' || tab === 'table') && size(term) < 5000 ? termKind(term) : null), [term, tab]);
+  const want: ToolsTab | null = tab === 'table' && kind === 'boolean' ? 'truth' : tab === 'truth' && kind === 'numeric' ? 'table' : null;
+  if (!want) return null;
+  return (
+    <p className="tool-hint">
+      This looks like a {kind === 'boolean' ? 'Boolean function' : 'function on numbers'}.{' '}
+      <button type="button" className="linklike" onClick={() => setSetting('toolsTab', want)}>Open {TABS.find((t) => t.id === want)!.label}</button>
+    </p>
+  );
+}
 
 export function ToolsPanel() {
   const tab = useStore((s) => s.settings.toolsTab);
   const setSetting = useStore((s) => s.setSetting);
+  const cur = TABS.find((t) => t.id === tab) ?? TABS[0];
   return (
     <div className="tools-panel">
-      <TabList tabs={TABS} value={tab} onChange={(t) => setSetting('toolsTab', t)} label="Tools" idPrefix="tools" className="tool-tabs" />
-      <TabPanel idPrefix="tools" value={tab} className="tool-body">
+      {/* one menu instead of six wrapping tabs: a fourth level of tabs on phones */}
+      <div className="tool-pick">
+        <label className="field">Tool
+          <select value={tab} onChange={(e) => setSetting('toolsTab', e.target.value as ToolsTab)}>
+            {TABS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+          </select>
+        </label>
+        <span className="muted">{cur.title}</span>
+      </div>
+      <ToolHint tab={tab} />
+      <div className="tool-body" role="region" aria-label={cur.label}>
         {tab === 'expr' && <ExpressionTool />}
         {tab === 'truth' && <TruthTool />}
         {tab === 'table' && <TableTool />}
         {tab === 'laws' && <LawsTool />}
         {tab === 'data' && <DataTool />}
         {tab === 'generate' && <GenerateTool />}
-      </TabPanel>
+      </div>
     </div>
   );
 }

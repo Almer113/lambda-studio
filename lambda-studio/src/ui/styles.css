@@ -169,6 +169,9 @@ kbd { border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 
 .sw.glow.hl-link { --sw-c: color-mix(in srgb, var(--hl-link) 55%, transparent); }
 rect.hl-hover { fill: var(--hl-hover); }
 
+.conv-bar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; font-size: var(--fs-xs); margin-bottom: 4px; }
+.copy-menu > .icon-btn { min-height: var(--h-sm); min-width: var(--h-sm); padding: 0 6px; }
+.copy-menu .popover-panel { min-width: 160px; }
 .conv-group { border-top: 1px solid var(--border); padding-top: 4px; margin-top: 4px; }
 .conv-group:first-of-type { border-top: none; margin-top: 0; }
 .group-title { display: block; width: 100%; min-height: var(--h-sm); text-align: left; border: none; background: none; padding: 4px 0; font-weight: 600; font-size: var(--fs-xs); color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
@@ -334,7 +337,13 @@ body:has(.tutorial) .edit-bar { left: 16px; transform: none; max-width: calc(100
 .edit-bar .err { color: var(--danger); margin: 0; font-size: var(--fs-sm); }
 .edit-sel { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .edit-sel code { word-break: break-all; }
-.edit-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.edit-actions { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
+.edit-group { display: inline-flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.edit-group-label { font-size: var(--fs-xs); color: var(--muted); margin-right: 2px; }
+/* while the edit bar shows, the centre column keeps room below for it (after it has faded in, so
+   nothing moves between the two clicks of a double-click) */
+.col-center { transition: padding-bottom 0s 0.45s; }
+body:has(.edit-bar) .col-center { padding-bottom: calc(var(--edit-bar-h, 0px) + 16px); }
 .edit-actions button { font-size: var(--fs-xs); min-height: var(--h-sm); padding: 0 8px; }
 .edit-actions button.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .edit-input { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
@@ -460,7 +469,11 @@ button.linklike { background: none; border: 0; padding: 0; min-height: 0; color:
 .tablist [role="tab"] { display: inline-flex; align-items: center; gap: 5px; border-radius: var(--r-pill); font-size: var(--fs-sm); padding: 0 12px; color: var(--muted); }
 .side-panel { display: flex; flex-direction: column; gap: 8px; flex: 1 0 auto; }
 .tools-panel { display: flex; flex-direction: column; gap: 8px; }
-.tool-tabs [role="tab"] { min-height: var(--h-sm); padding: 0 10px; font-size: var(--fs-xs); }
+.tool-pick { display: flex; flex-direction: column; gap: 2px; }
+.tool-pick .field { color: var(--muted); font-size: var(--fs-xs); }
+.tool-pick select { flex: 1; font-size: var(--fs-md); }
+.tool-pick .muted { font-size: var(--fs-xs); }
+.tool-hint { margin: 0; padding: 4px 8px; border-radius: var(--r); background: var(--accent-soft); font-size: var(--fs-sm); }
 
 /* --- toast --- */
 .toast-region { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 90; pointer-events: none; }
@@ -478,7 +491,7 @@ button.linklike { background: none; border: 0; padding: 0; min-height: 0; color:
 
 /* --- touch: larger targets --- */
 @media (pointer: coarse) {
-  button, select, .seg button, .tablist [role="tab"], .icon-btn.copy, .icon-btn.small, .edit-actions button, .tool-code-actions button, button.small { min-height: var(--h-touch); }
+  button, select, .seg button, .tablist [role="tab"], .icon-btn.copy, .icon-btn.small, .copy-menu > .icon-btn, .edit-actions button, .tool-code-actions button, button.small { min-height: var(--h-touch); }
   .icon-btn { min-width: var(--h-touch); }
   .check input { width: 20px; height: 20px; }
   .lib-item { padding: 8px 6px; }

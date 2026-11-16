@@ -13,7 +13,7 @@ New to the λ-calculus? The **Tutorial** (the graduation-cap button in the heade
 | **Current term** | The term at the current step, as text or typeset. Click a part to select it for editing. The tag button turns names and numerals on and off. If the last line has a syntax error, the last definition is shown instead, with a note saying so. |
 | **Tromp diagram** | The term as a diagram. Hover, click, double-click, zoom and pan. The legend under it explains the colours. |
 | **Inspector** (right) | Status, decoded value, size, BLC bits, closedness and the simple type. |
-| **Notations · Tools** (right, tabs) | Notations: the current term in every notation, each with copy buttons and, where useful, a TeX view. Tools: Expression → λ, truth tables, number tables, laws, data types, generators. |
+| **Notations · Tools** (right, tabs) | Notations: the current term in every notation. One TeX/Text switch at the top typesets the λ notations; their copy menu copies as text or as LaTeX. Tools: pick one from the Tool menu: Expression → λ, truth tables, number tables, laws, data types, generators. |
 
 The header holds the **File** menu (new, open and save a workspace, copy a share link, export), the **Examples** menu (grouped by topic, with one example for each input notation), the **Input** format and the **Strategy** menu (the reduction strategy and η). On the right: **Settings** (gear), the tutorial, help and the theme.
 
@@ -61,7 +61,7 @@ Each λ is a horizontal bar, each variable a vertical line from its binder's bar
 
 ## Building terms (the creator)
 
-Select a subterm by clicking it in the diagram or the current term (or press an arrow key with the diagram focused, then use ↑ ↓ ← → to move). With the diagram focused, Enter β-reduces the selection and Delete removes it. The edit bar appears at the bottom of the window and offers:
+Select a subterm by clicking it in the diagram or the current term (or press an arrow key with the diagram focused, then use ↑ ↓ ← → to move). With the diagram focused, Enter β-reduces the selection and Delete removes it. The edit bar appears at the bottom of the window, with its actions grouped as Reduce, Wrap, Change and Name; the page keeps room below so it does not cover the diagram. It offers:
 
 | Action | Effect |
 |---|---|
@@ -76,6 +76,8 @@ Select a subterm by clicking it in the diagram or the current term (or press an 
 Dragging a library name onto a diagram line replaces that subterm with the definition. Clicking a library name inserts it at the cursor in the source; before you have clicked into the editor, it goes at the end of the main expression. Every other edit rewrites the source, so the text and the diagram never disagree. In named notation your definitions and leading comments are kept, and only names you already use are folded back in; a source in another notation (BLC, SKI, de Bruijn…) becomes named notation, keeping its leading comments.
 
 ## Tools
+
+Choose a tool from the **Tool** menu. When the term suits another tool better (a Boolean function in the Number table, or a function on numbers in the Truth table), a note offers to switch.
 
 - **Expression → λ:** type arithmetic or logic, e.g. `(2 + 3) * 4^2` or `(a ∧ ¬b) ∨ c`, as text, LaTeX, or with the **Math editor**. Closed expressions are evaluated both directly and as λ-terms, and the results are compared.
 - **Truth table:** applies the current term to all combinations of TRUE/FALSE (up to 10 inputs) and gives the canonical DNF and CNF and a minimal formula.

@@ -19,8 +19,9 @@ import { TexView, ViewToggle } from './Tex';
 import { reduceInnermost } from './TermText';
 import { useFolder, useTexSetting, BIG } from './panels';
 import { NoTerm } from './NoTerm';
-import { ChevronDown, ChevronRight, TextCursorInput, FileInput } from 'lucide-react';
-import { insertIntoSource } from './Toast';
+import { ChevronDown, ChevronRight, TextCursorInput, FileInput, Copy } from 'lucide-react';
+import { insertIntoSource, useToast } from './Toast';
+import { Popover, MenuItem } from './Popover';
 import { IconButton, CopyButton } from './IconButton';
 
 /** Longest text shown in a row (copy still gives everything). */
@@ -129,8 +130,15 @@ export function Conversions() {
     return out;
   }, [term, tooBig, fold, avoid, cl, open]);
 
+  const [asTex, setAsTex] = useTexSetting('notations');
   return (
     <div className="conversions">
+      {term && !tooBig && (
+        <div className="conv-bar">
+          <span className="muted">λ notations as</span>
+          <ViewToggle tex={asTex} onChange={setAsTex} title="Show the λ notations typeset or as text" />
+        </div>
+      )}
       {!term && <NoTerm text="—" brief />}
       {tooBig && <button onClick={() => setForce(true)}>Term is large ({size(term!)} nodes) — compute notations</button>}
       {term && !tooBig && GROUPS.map((g) => (
@@ -153,16 +161,36 @@ export function Conversions() {
               <p className="hint">{ALGORITHMS.find((a) => a.id === algorithm)!.description} Unlambda, Iota, Jot and binary CL rewrite the result into S and K.</p>
             </div>
           )}
-          {open[g.id] && groups?.[g.id]?.map((r) => <OutputRow key={r.id} row={r} />)}
+          {open[g.id] && groups?.[g.id]?.map((r) => <OutputRow key={r.id} row={r} asTex={asTex} />)}
         </section>
       ))}
     </div>
   );
 }
 
-function OutputRow({ row }: { row: Row }) {
-  const { id, label, text, note, mono, error } = row;
-  const [asTex, setAsTex] = useTexSetting(id);
+/** Copy a row as text or, where it has one, as LaTeX: one menu instead of two buttons. */
+function CopyMenu({ row }: { row: Row }) {
+  const copy = async (text: string, what: string) => {
+    try {
+      if (!navigator.clipboard) throw new Error('no clipboard');
+      await navigator.clipboard.writeText(text);
+      useToast.getState().show(`Copied ${what}`);
+    } catch { useToast.getState().show('Copying is not allowed here'); }
+  };
+  return (
+    <Popover icon={Copy} label={`Copy ${row.label}`} menu align="right" className="copy-menu">
+      {(close) => (
+        <>
+          <MenuItem close={close} onSelect={() => copy(row.text, row.label)}>Copy as text</MenuItem>
+          <MenuItem close={close} onSelect={() => { try { copy(row.tex!().plain, `${row.label} as LaTeX`); } catch (e) { useToast.getState().show((e as Error).message); } }}>Copy as LaTeX</MenuItem>
+        </>
+      )}
+    </Popover>
+  );
+}
+
+function OutputRow({ row, asTex }: { row: Row; asTex: boolean }) {
+  const { label, text, note, mono, error } = row;
   const hover = useStore((s) => s.hover);
   const setHover = useStore((s) => s.setHover);
   const tex = useMemo(() => { try { return asTex && row.tex && text ? row.tex() : null; } catch { return null; } }, [asTex, row, text]);
@@ -173,9 +201,7 @@ function OutputRow({ row }: { row: Row }) {
         <span className="out-label">{label}</span>
         {(note || text.length > SHOW) && <span className="out-note">{text.length > SHOW ? `${text.length.toLocaleString()} characters, showing the start · ` : ''}{note}</span>}
         <span className="out-tools">
-          {row.tex && text && <ViewToggle tex={asTex} onChange={setAsTex} />}
-          {text && <CopyButton text={text} what={label} />}
-          {tex && <CopyButton text={tex.plain} what={`${label} as LaTeX`} caption="TeX" />}
+          {text && (row.tex ? <CopyMenu row={row} /> : <CopyButton text={text} what={label} />)}
         </span>
       </div>
       {error && <div className="out-error">{error}</div>}

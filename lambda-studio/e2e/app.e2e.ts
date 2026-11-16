@@ -223,3 +223,17 @@ test('on a 1440×900 screen the diagram and its legend fit without scrolling', a
   expect(fits.scrolls).toBe(false);
   expect(fits.legendBottom).toBeLessThanOrEqual(fits.height);
 });
+
+test('the tools point at the one that suits the term; a notation copies as text or LaTeX', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await open(page);
+  await setSource(page, 'AND');
+  await page.evaluate(() => { const s = (window as any).__store.getState(); s.setSetting('sideTab', 'tools'); s.setSetting('toolsTab', 'table'); });
+  await page.getByRole('button', { name: 'Open Truth table' }).click();
+  await expect(page.getByRole('combobox', { name: 'Tool' })).toHaveValue('truth');
+
+  await page.evaluate(() => (window as any).__store.getState().setSetting('sideTab', 'notations'));
+  await page.getByRole('button', { name: 'Copy Named (with names)' }).click();
+  await page.getByRole('menuitem', { name: 'Copy as LaTeX' }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('\mathsf{AND}');
+});

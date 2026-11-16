@@ -1,7 +1,7 @@
 // Creator toolbar: actions on the selected subterm (click a line in the diagram or a part of
 // the current term to select it). Results are written back to the source.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore, currentTerm } from './store';
 import { useFolder } from './panels';
 import { ACTIONS, applicable, freshName, type EditAction } from '../core/edit';
@@ -10,6 +10,26 @@ import { parseProgram } from '../core/program';
 import { printNamed } from '../core/formats/named';
 import { X, CornerLeftUp } from 'lucide-react';
 import { IconButton } from './IconButton';
+
+/** The actions in groups, in this order (Parent comes last). */
+const GROUPS: { label: string; ids: EditAction[] }[] = [
+  { label: 'Reduce', ids: ['beta', 'eta-reduce'] },
+  { label: 'Wrap', ids: ['abstract', 'unwrap', 'eta-expand'] },
+  { label: 'Change', ids: ['apply', 'pass', 'replace', 'delete'] },
+  { label: 'Name', ids: ['fold'] },
+];
+
+/** The bar's height as --edit-bar-h on the root, so the page can keep that much room below it. */
+function useBarHeight() {
+  const ro = useRef<ResizeObserver | null>(null);
+  useEffect(() => () => { ro.current?.disconnect(); document.documentElement.style.removeProperty('--edit-bar-h'); }, []);
+  return useCallback((el: HTMLDivElement | null) => {
+    ro.current?.disconnect();
+    if (!el) { document.documentElement.style.removeProperty('--edit-bar-h'); return; }
+    ro.current = new ResizeObserver(() => document.documentElement.style.setProperty('--edit-bar-h', `${Math.ceil(el.getBoundingClientRect().height)}px`));
+    ro.current.observe(el);
+  }, []);
+}
 
 function describePath(p: Path): string {
   if (p === '') return 'the whole term';
@@ -29,6 +49,7 @@ export function EditBar() {
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const barRef = useBarHeight();
 
   const sub = useMemo(() => { if (!term || selected === null) return null; try { return getAt(term, selected); } catch { return null; } }, [term, selected]);
   const ok = useMemo(() => (term && selected !== null && sub ? applicable(term, selected, eta) : new Set<EditAction>()), [term, selected, sub, eta]);
@@ -67,14 +88,19 @@ export function EditBar() {
 
   const shown = size(sub) < 400 ? printNamed(sub, { fold, avoid }).text : `(${size(sub)} nodes)`;
   return (
-    <div className="edit-bar" role="toolbar" aria-label="Edit the selected subterm" onKeyDown={toolbarKeys}>
+    <div className="edit-bar" ref={barRef} role="toolbar" aria-label="Edit the selected subterm" onKeyDown={toolbarKeys}>
       <div className="edit-sel">
         <span className="muted">Selected:</span> <code title={describePath(selected)}>{shown}</code>
         <IconButton icon={X} className="small" label="Clear the selection" shortcut="Esc" tip="above" onClick={() => select(null)} />
       </div>
       <div className="edit-actions">
-        {ACTIONS.map((a) => (
-          <button key={a.id} className={pending === a.id ? 'on' : ''} disabled={!ok.has(a.id)} title={a.title} onClick={() => start(a.id)}>{a.label}</button>
+        {GROUPS.map((g) => (
+          <div key={g.label} className="edit-group" role="group" aria-label={g.label}>
+            <span className="edit-group-label" aria-hidden>{g.label}</span>
+            {g.ids.map((id) => ACTIONS.find((a) => a.id === id)!).map((a) => (
+              <button key={a.id} className={pending === a.id ? 'on' : ''} disabled={!ok.has(a.id)} title={a.title} onClick={() => start(a.id)}>{a.label}</button>
+            ))}
+          </div>
         ))}
         {selected !== '' && <IconButton icon={CornerLeftUp} text="Parent" label="Select the enclosing term" shortcut="↑" tip="above" onClick={() => select(selected.slice(0, -1))} />}
       </div>
