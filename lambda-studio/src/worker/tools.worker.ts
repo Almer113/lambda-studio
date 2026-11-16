@@ -8,9 +8,12 @@ import { truthTable, type TruthTable } from '../core/algebra/boolean';
 import { evalAt, type Value } from '../core/algebra/numeric';
 import { checkLaw, type LawResult } from '../core/algebra/laws';
 import { busyBeaver, enumerateClosed, classify, Counter, type BBResult } from '../core/generate';
+import { normalize } from '../core/nbe';
+import { decodeNumeral, decodeBool } from '../core/encodings';
 
 export type ToolRequest =
   | { id: number; type: 'truth'; term: Term; n: number; names: string[]; fuel: number }
+  | { id: number; type: 'value'; term: Term; as: 'num' | 'bool'; fuel: number }
   | { id: number; type: 'table'; term: Term; arity: 1 | 2; N: number; fuel: number }
   | { id: number; type: 'law'; left: Term; right: Term; fuel: number }
   | { id: number; type: 'bb'; n: number; fuel: number }
@@ -21,6 +24,7 @@ export interface EnumItem { term: Term; nf: number | null; betas: number | null 
 export type ToolResponse =
   | { id: number; type: 'progress'; done: number; total: number }
   | { id: number; type: 'truth'; table: TruthTable }
+  | { id: number; type: 'value'; value: number | boolean | null }
   | { id: number; type: 'table'; rows: Value[][] }
   | { id: number; type: 'law'; result: LawResult }
   | { id: number; type: 'bb'; result: BBResult }
@@ -33,6 +37,12 @@ self.onmessage = (e: MessageEvent<ToolRequest>) => {
   const req = unpackDeep(e.data);
   try {
     switch (req.type) {
+      case 'value': {
+        // the normal form of an Expression-tool term, read back as a number or truth value
+        const n = normalize(req.term, req.fuel);
+        post({ id: req.id, type: 'value', value: n.term ? (req.as === 'num' ? decodeNumeral(n.term) : decodeBool(n.term)) : null });
+        break;
+      }
       case 'truth':
         post({ id: req.id, type: 'truth', table: truthTable(req.term, req.n, req.names, req.fuel) });
         break;

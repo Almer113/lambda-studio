@@ -30,19 +30,26 @@ export function betaLineage(before: Term, redex: Path): Map<Path, string> {
   };
   mapSame(before, '');
   // the contractum: walk the body; bound occurrences become copies of the argument
+  // (explicit stacks, in left-to-right order so that copies are numbered as they occur: terms can be
+  // far deeper than the call stack)
   let copies = 0;
-  const walkArg = (n: Term, srcPath: Path, dstPath: Path, k: number) => {
-    after.set(dstPath, `${srcPath}#${k}`);
-    if (n.tag === 'lam') walkArg(n.body, srcPath + 'b', dstPath + 'b', k);
-    else if (n.tag === 'app') { walkArg(n.fn, srcPath + 'f', dstPath + 'f', k); walkArg(n.arg, srcPath + 'a', dstPath + 'a', k); }
+  const walkArg = (dst0: Path, k: number) => {
+    const stack: [Term, Path, Path][] = [[r.arg, redex + 'a', dst0]];
+    while (stack.length) {
+      const [n, srcPath, dstPath] = stack.pop()!;
+      after.set(dstPath, `${srcPath}#${k}`);
+      if (n.tag === 'lam') stack.push([n.body, srcPath + 'b', dstPath + 'b']);
+      else if (n.tag === 'app') stack.push([n.arg, srcPath + 'a', dstPath + 'a'], [n.fn, srcPath + 'f', dstPath + 'f']);
+    }
   };
-  const walkBody = (n: Term, srcPath: Path, dstPath: Path, depth: number) => {
-    if (n.tag === 'var' && n.i === depth) { walkArg(r.arg, redex + 'a', dstPath, copies++); return; }
+  const body: [Term, Path, Path, number][] = [[lamNode.body, redex + 'fb', redex, 0]];
+  while (body.length) {
+    const [n, srcPath, dstPath, depth] = body.pop()!;
+    if (n.tag === 'var' && n.i === depth) { walkArg(dstPath, copies++); continue; }
     after.set(dstPath, srcPath);
-    if (n.tag === 'lam') walkBody(n.body, srcPath + 'b', dstPath + 'b', depth + 1);
-    else if (n.tag === 'app') { walkBody(n.fn, srcPath + 'f', dstPath + 'f', depth); walkBody(n.arg, srcPath + 'a', dstPath + 'a', depth); }
-  };
-  walkBody(lamNode.body, redex + 'fb', redex, 0);
+    if (n.tag === 'lam') body.push([n.body, srcPath + 'b', dstPath + 'b', depth + 1]);
+    else if (n.tag === 'app') body.push([n.arg, srcPath + 'a', dstPath + 'a', depth], [n.fn, srcPath + 'f', dstPath + 'f', depth]);
+  }
   return after;
 }
 
@@ -139,12 +146,3 @@ function lerpRect(a: Rect, b: Rect, u: number): Rect {
   return { x: l(a.x, b.x), y: l(a.y, b.y), w: l(a.w, b.w), h: l(a.h, b.h) };
 }
 
-/** Draw a frame on a 2D canvas context (transform already set to diagram units). */
-export function drawFrame(ctx: CanvasRenderingContext2D, rects: FrameRect[], minPixel: number) {
-  for (const r of rects) {
-    ctx.globalAlpha = r.alpha;
-    ctx.fillStyle = r.color;
-    ctx.fillRect(r.x, r.y, Math.max(r.w, minPixel), Math.max(r.h, minPixel));
-  }
-  ctx.globalAlpha = 1;
-}

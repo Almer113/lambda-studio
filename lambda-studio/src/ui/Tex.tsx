@@ -20,14 +20,17 @@ function loadKatex(): Promise<Katex> {
   return katexPromise;
 }
 
-export function useKatex(): Katex | null {
-  const [k, setK] = useState<Katex | null>(katexLoaded);
-  useEffect(() => { if (!k) loadKatex().then(setK).catch(() => {}); }, [k]);
+/** The KaTeX module once loaded; false if it could not be loaded (offline, blocked). */
+export function useKatex(): Katex | null | false {
+  const [k, setK] = useState<Katex | null | false>(katexLoaded);
+  useEffect(() => {
+    if (!k) loadKatex().then(setK).catch(() => { katexPromise = null; setK(false); });
+  }, [k]);
   return k;
 }
 
 /** Above this many characters of LaTeX, rendering is skipped (slow, and unreadable anyway). */
-export const TEX_LIMIT = 40000;
+const TEX_LIMIT = 40000;
 
 export function renderTex(katex: Katex, tex: string, display = false): string {
   return katex.renderToString(tex, {
@@ -77,6 +80,7 @@ export function TexView({ tex, className, hover = null, redex = null, onHover, o
   }, [html, hover, redex, selected]);
 
   if (tex.length > TEX_LIMIT) return <div className="empty">Too large to typeset ({tex.length.toLocaleString()} characters of LaTeX). Switch to text.</div>;
+  if (katex === false) return <div className="empty">The typesetter could not be loaded. Switch to text, or reload the page.</div>;
   if (!html) return <div className="empty">Loading typesetter…</div>;
   return (
     <div

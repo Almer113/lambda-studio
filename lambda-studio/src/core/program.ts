@@ -257,6 +257,7 @@ function parseNamedProgram(src: string, opts: ProgramOptions, base: Program): Pr
     for (const e of PRELUDE) if (e.fold && defs.get(e.name)?.origin === 'prelude') foldTable.add(e.name, prelude.get(e.name)!.term!);
   }
   const defInfos: DefInfo[] = user.map((u) => ({ name: u.name, origin: 'user', term: u.term ?? null, error: u.error, recursive: u.recursive, span: u.span }));
+  diagnostics.push(...r.warnings);
   return { ...base, term, diagnostics, defs: defInfos, mainName, foldTable };
 }
 

@@ -20,12 +20,14 @@ import { NoTerm } from './NoTerm';
 import { SkipBack, StepBack, StepForward, Play, Pause, FastForward, Zap, Square, ChevronDown, ChevronRight, Tag } from 'lucide-react';
 import { IconButton } from './IconButton';
 
-function useTexSetting(id: string): [boolean, (v: boolean) => void] {
+/** Whether a view shows typeset TeX (per view id, kept in the settings). */
+export function useTexSetting(id: string): [boolean, (v: boolean) => void] {
   const tex = useStore((s) => s.settings.tex[id] ?? false);
   return [tex, (v: boolean) => { const st = useStore.getState(); st.setSetting('tex', { ...st.settings.tex, [id]: v }); }];
 }
 
-const BIG = 25000;
+/** Above this many nodes, terms are summarised instead of printed in full. */
+export const BIG = 25000;
 
 /** A name or a number: the only things that may be folded at a place where the user typed them. */
 const ONE_TOKEN = /^(?:[\p{L}_][\p{L}\p{N}_'₀-₉]*|[0-9]+)$/u;

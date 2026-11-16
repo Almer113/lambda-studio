@@ -98,8 +98,8 @@ export function Editor() {
     // these act on what was just typed, so a pending commit goes through first
     const runKeys = keymap.of([
       { key: 'Mod-Enter', run: (v) => { commit(v); useStore.getState().runToNormal(); return true; } },
-      { key: 'Alt-ArrowRight', run: (v) => { commit(v); useStore.getState().stepForward(); return true; } },
-      { key: 'Alt-ArrowLeft', run: (v) => { commit(v); useStore.getState().stepBack(); return true; } },
+      { key: 'Alt-ArrowRight', mac: 'Ctrl-Alt-ArrowRight', run: (v) => { commit(v); useStore.getState().stepForward(); return true; } },
+      { key: 'Alt-ArrowLeft', mac: 'Ctrl-Alt-ArrowLeft', run: (v) => { commit(v); useStore.getState().stepBack(); return true; } },
     ]);
     const onChange = EditorView.updateListener.of((u) => {
       // changes pushed in from the store are already there; echoing them back would reset the

@@ -34,9 +34,9 @@ export function checkLaw(a: Term, b: Term, fuel = 500_000): LawResult {
 
 /** Classic equations to try (written in the named notation; definitions from the prelude). */
 export const LAWS: { name: string; left: string; right: string; note?: string }[] = [
+  { name: 'S K K = I', left: 'S K K', right: 'I' },
   { name: 'MULT is B', left: 'MULT', right: 'B' },
   { name: 'EXP is flipped application', left: 'λm n.EXP m n', right: 'λm n.n m' },
-  { name: 'S K K = I', left: 'S K K', right: 'I' },
   { name: '2 + 3 = 5', left: 'PLUS 2 3', right: '5' },
   { name: '2 · 3 = 3 · 2', left: 'MULT 2 3', right: 'MULT 3 2' },
   { name: 'Addition commutes (open terms)', left: 'λm n.PLUS m n', right: 'λm n.PLUS n m', note: 'True for numerals, but not as λ-terms: the normal forms differ.' },

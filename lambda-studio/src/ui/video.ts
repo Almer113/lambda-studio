@@ -96,14 +96,24 @@ export async function encodeGif(plan: VideoPlan, o: VideoOptions, progress: Prog
   c.width = plan.W; c.height = plan.H;
   const ctx = c.getContext('2d', { willReadFrequently: true })!;
   const gif = GIFEncoder();
-  // merge consecutive identical stills; GIF delays are in 10 ms units
-  for (let i = 0; i < plan.frames.length; i++) {
+  // One palette for the whole animation, from a few sample frames: the diagram uses a small, fixed set
+  // of colours, and quantizing every frame separately was most of the encoding time.
+  const n = plan.frames.length;
+  const samples = [...new Set([0, Math.floor(n / 4), Math.floor(n / 2), Math.floor((3 * n) / 4), n - 1])];
+  const area = plan.W * plan.H * 4;
+  const pool = new Uint8ClampedArray(area * samples.length);
+  samples.forEach((k, j) => {
+    paint(ctx, frameRects(plan.frames[k], o), o.background, plan.W, plan.H);
+    pool.set(ctx.getImageData(0, 0, plan.W, plan.H).data, j * area);
+  });
+  const palette = quantize(pool, 128);
+  for (let i = 0; i < n; i++) {
     if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
     const f = plan.frames[i];
     paint(ctx, frameRects(f, o), o.background, plan.W, plan.H);
     const { data } = ctx.getImageData(0, 0, plan.W, plan.H);
-    const palette = quantize(data, 64);
-    gif.writeFrame(applyPalette(data, palette), plan.W, plan.H, { palette, delay: Math.max(20, Math.round(f.ms / 10) * 10), repeat: 0 });
+    // GIF delays are in 10 ms units
+    gif.writeFrame(applyPalette(data, palette), plan.W, plan.H, { palette: i === 0 ? palette : undefined, delay: Math.max(20, Math.round(f.ms / 10) * 10), repeat: 0 });
     progress(i + 1, plan.frames.length);
     if (i % 3 === 0) await tick();
   }

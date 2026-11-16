@@ -446,6 +446,8 @@ button.linklike { background: none; border: 0; padding: 0; color: var(--accent);
   .brand-name { display: none; }
 }
 
+.panel-error.compact { padding: 6px 12px; color: var(--muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
 /* --- phone: last, so these win over the component rules above --- */
 @media (max-width: 860px) {
   .header { gap: 6px; padding: 6px 10px; flex-wrap: nowrap; }

@@ -382,9 +382,13 @@ export class Resolver {
           if (n.n > MAX_NUMERAL) throw new ParseError(`Numeral too large (max ${MAX_NUMERAL})`, n.from, n.to);
           out.push(churchNumeral(n.n));
           return;
-        case 'str':
-          out.push(churchList([...n.s].map((ch) => churchNumeral(Math.min(ch.codePointAt(0)!, MAX_NUMERAL)))));
+        case 'str': {
+          const chars = [...n.s];
+          const big = chars.filter((ch) => ch.codePointAt(0)! > MAX_NUMERAL);
+          if (big.length) this.warnings.push({ from: n.from, to: n.to, severity: 'warning', message: `${[...new Set(big)].join(' ')}: character codes above ${MAX_NUMERAL.toLocaleString('en')} are stored as ${MAX_NUMERAL.toLocaleString('en')} (numerals that large are not practical)` });
+          out.push(churchList(chars.map((ch) => churchNumeral(Math.min(ch.codePointAt(0)!, MAX_NUMERAL)))));
           return;
+        }
         case 'lam': {
           let pth = path;
           for (let k = 0; k < n.params.length; k++) pth += 'b';

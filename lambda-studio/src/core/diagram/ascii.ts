@@ -22,8 +22,9 @@ const BOX: Record<number, string> = {
 };
 
 /**
- * Box-drawing rendering: one character per pixel column, one text line per two pixel rows
- * (λ bars sit on even rows and application links on odd rows, so nothing collides).
+ * Box-drawing rendering: one character per pixel column, one text line per two pixel rows. In the
+ * standard style λ bars sit on even rows and application links on odd rows; in the alternative
+ * style both are on even rows, but a link is always below every bar it crosses, so nothing collides.
  */
 export function toBoxChars(d: Diagram): string {
   const top = d.top;
@@ -35,7 +36,7 @@ export function toBoxChars(d: Diagram): string {
   for (const s of d.segments) {
     if (s.kind === 'var') {
       const r1 = cy(s.y1), r2 = cy(s.y2);
-      const open = s.y2 === d.height - 1; // the diagram's output line continues downward
+      const open = !d.alternative && s.y2 === d.height - 1; // the standard style's output line continues downward
       for (let r = r1; r <= r2; r++) add(r, s.x1, (r > r1 || s.y1 < 0 ? U : 0) | (r < r2 || open ? D : 0));
     } else {
       const r = cy(s.y1);

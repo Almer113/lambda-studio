@@ -154,7 +154,11 @@ export function run(t: Term, opts: RunOptions): RunResult {
       if (sz > opts.maxSize) return { term: cur, steps, status: 'size-limit', maxSizeSeen, history, message: `Term grew to ${sz} nodes (limit ${opts.maxSize}).` };
       const cyc = remember(cur, steps);
       if (cyc !== null) {
-        if (history.length < record) history.push({ term: cur, path: findRedex(cur, opts), kind: 'beta' });
+        if (history.length < record) {
+          const p = findRedex(cur, opts);
+          const n = p === null ? null : getAt(cur, p);
+          history.push({ term: cur, path: p, kind: n === null ? null : n.tag === 'app' && n.fn.tag === 'lam' ? 'beta' : 'eta' });
+        }
         return { term: cur, steps, status: 'cycle', maxSizeSeen, history, cycleLength: cyc, message: `The term reduces to itself after ${cyc} step${cyc === 1 ? '' : 's'}: it has no normal form under this strategy.` };
       }
       if (opts.onProgress && steps % 500 === 0) opts.onProgress(steps, sz);

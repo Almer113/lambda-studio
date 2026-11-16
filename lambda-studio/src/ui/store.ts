@@ -7,7 +7,7 @@ import { ALGORITHMS } from '../core/combinators';
 import type { WorkerRequest, WorkerResponse } from '../worker/eval.worker';
 import EvalWorker from '../worker/eval.worker?worker&inline';
 import type { Algorithm } from '../core/combinators';
-import { applyEdit, rewriteSource, type EditAction } from '../core/edit';
+import { applyEdit, rewriteSource, ACTIONS, type EditAction } from '../core/edit';
 import { printNamed } from '../core/formats/named';
 import { makeFolder } from '../core/fold';
 import { getAt } from '../core/term';
@@ -295,7 +295,7 @@ export const useStore = create<State>((set, get) => {
       const prog = compile(src, format, st.settings);
       let keep: Path | null = null;
       if (prog.term) { try { getAt(prog.term, p); keep = p; } catch { keep = null; } }
-      set({ source: src, format, ...reset(prog), selected: keep, message: { text: `Edited: ${action}. The source was rewritten from the current term.`, tone: 'info' } });
+      set({ source: src, format, ...reset(prog), selected: keep, message: { text: `${ACTIONS.find((a) => a.id === action)?.label.replace(/…$/, '') ?? action}: the source was rewritten from the current term.`, tone: 'info' } });
       save(get());
       return null;
     },
@@ -377,6 +377,13 @@ export const useStore = create<State>((set, get) => {
         if (m.term) {
           pushEntries([{ term: m.term, via: { kind: 'nbe', note: `${m.betas} shared β-steps` } }], base);
           set({ running: null, message: { text: `Normal form via fast normalizer (${m.betas} β-steps with sharing, ${m.size} nodes).`, tone: 'info' } });
+        } else if (m.status === 'fuel') {
+          // not an error: the term may have no normal form (Ω), or need more work than allowed
+          const fuel = settings.maxSteps * 100;
+          set({ running: null, message: {
+            text: `No normal form within ${fuel.toLocaleString('en')} β-steps: the term may have none (like Ω), or need more.`, tone: 'warn',
+            action: settings.maxSteps < 10_000_000 ? { label: 'Raise the limit ×10 and try again', run: () => { const s = useStore.getState(); s.setSetting('maxSteps', Math.min(10_000_000, s.settings.maxSteps * 10)); s.normalizeFast(); } } : undefined,
+          } });
         } else set({ running: null, message: { text: m.message ?? 'Failed', tone: 'error' } });
       }, failed);
       const req: WorkerRequest = { id, type: 'normalize', term: cur, fuel: settings.maxSteps * 100, eta: settings.eta };

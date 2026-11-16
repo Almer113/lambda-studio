@@ -81,6 +81,7 @@ function DiagramExport() {
   const [fmt, setFmt] = useState<DiagramFormat>('svg');
   const [scale, setScale] = useState(8);
   const [transparent, setTransparent] = useState(false);
+  const [pngError, setPngError] = useState<string | null>(null);
   const [dark, setDark] = useState(isDark);
   const d = useMemo(() => (term ? layoutSafe(term, settings.diagramStyle) : null), [term, settings.diagramStyle]);
   const color = (s: Parameters<typeof segmentColor>[0]) => segmentColor(s, settings.colorMode, dark);
@@ -109,17 +110,25 @@ function DiagramExport() {
   const save = () => {
     if (!d) return;
     if (fmt === 'png') {
-      const svg = toSVG(d, { scale: pngScale, background: bg, color });
-      const img = new Image();
-      img.onload = () => {
-        const c = document.createElement('canvas');
-        c.width = img.width; c.height = img.height;
-        const ctx = c.getContext('2d')!;
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(img, 0, 0);
-        c.toBlob((b) => b && download(b, 'lambda-diagram.png'));
-      };
-      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+      setPngError(null);
+      const fail = () => setPngError('The browser could not make this PNG (it may be too large). Try a smaller scale, or SVG.');
+      try {
+        const svg = toSVG(d, { scale: pngScale, background: bg, color });
+        const img = new Image();
+        img.onerror = fail;
+        img.onload = () => {
+          try {
+            const c = document.createElement('canvas');
+            c.width = img.width; c.height = img.height;
+            const ctx = c.getContext('2d');
+            if (!ctx) { fail(); return; }
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(img, 0, 0);
+            c.toBlob((b) => (b ? download(b, 'lambda-diagram.png') : fail()));
+          } catch { fail(); }
+        };
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+      } catch { fail(); }
       return;
     }
     const out = fmt === 'svg' ? toSVG(d, { scale, background: bg, color }) : text;
@@ -144,6 +153,7 @@ function DiagramExport() {
         </>}
         <span className="muted">{settings.diagramStyle === 'alternative' ? 'Alternative' : 'Standard'} style · colour mode from the diagram panel</span>
       </div>
+      {fmt === 'png' && pngError && <p className="err">{pngError}</p>}
       {fmt === 'png' && <p className="muted">{(d.width + 4) * pngScale} × {(d.height - d.top + 4) * pngScale} px{pngScale < scale ? ' (scale reduced to stay under 16384 px)' : ''}</p>}
       <div className="export-preview">
         {isText ? (tooWide ? <p className="muted">Too wide for a text drawing ({d.width} columns).</p> : <textarea readOnly value={text} spellCheck={false} />)
@@ -188,6 +198,9 @@ function AnimationExport() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lo, hi, history, maxPx, perStep, kind, dark, settings.diagramStyle, settings.colorMode, settings.showRedex]);
 
+  // a finished animation belongs to the options it was made with: changing them discards it
+  useEffect(() => { setResult(null); setError(null); }, [plan]);
+
   const make = async () => {
     if (!plan.plan) return;
     setError(null); setResult(null);
@@ -212,7 +225,7 @@ function AnimationExport() {
           <option value="webm" disabled={!webmSupported()}>WebM video{webmSupported() ? '' : ' (not supported here)'}</option>
         </select></label>
         <label>Steps <NumberField min={0} max={last} value={lo} onChange={setFrom} /> to <NumberField min={0} max={last} value={hi} onChange={setTo} /></label>
-        <label>Size <select value={maxPx} onChange={(e) => setMaxPx(Number(e.target.value))}>{[240, 360, 480, 720, 1080].map((k) => <option key={k} value={k}>{k} px</option>)}</select></label>
+        <label>Size <select value={maxPx} onChange={(e) => setMaxPx(Number(e.target.value))}>{[240, 360, 480, 720, 1080].map((k) => <option key={k} value={k}>up to {k} px</option>)}</select></label>
         <label>Seconds per step <NumberField min={0.2} max={4} step={0.1} value={perStep} onChange={setPerStep} /></label>
         <label className="check"><input type="checkbox" checked={dark} onChange={(e) => setDark(e.target.checked)} /> Dark colours</label>
       </div>

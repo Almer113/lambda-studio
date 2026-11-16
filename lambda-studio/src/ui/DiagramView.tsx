@@ -96,7 +96,17 @@ export function DiagramView() {
     });
   };
 
-  useEffect(() => { if (autoFit) fit(); }, [diagram, autoFit, fit]);
+  // With auto-fit off the zoom is kept, but a new diagram that would be entirely out of view is fitted.
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  useEffect(() => {
+    if (autoFit) { fit(); return; }
+    const el = wrap.current;
+    if (!el || !diagram) return;
+    const v = viewRef.current;
+    const x0 = v.tx, y0 = v.ty + diagram.top * v.scale, x1 = v.tx + diagram.width * v.scale, y1 = v.ty + diagram.height * v.scale;
+    if (x1 < 0 || y1 < 0 || x0 > el.clientWidth || y0 > el.clientHeight) fit();
+  }, [diagram, autoFit, fit]);
   useEffect(() => {
     const el = wrap.current;
     if (!el) return;
@@ -397,7 +407,7 @@ export function DiagramView() {
         <canvas ref={animRef} className="diagram-canvas" style={{ pointerEvents: 'none', visibility: animating ? 'visible' : 'hidden' }} />
         {diagram && (
           <div className="diagram-info">
-            {diagram.width}×{diagram.height - diagram.top} px · {diagram.segments.length} lines
+            {diagram.width}×{diagram.height - diagram.top} units · {diagram.segments.length} lines
             {useCanvas && ' · canvas renderer'}
             {hoveredSegment && <> · {describeSeg(hoveredSegment)}</>}
           </div>

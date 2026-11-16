@@ -106,7 +106,7 @@ export function guessSequence(values: (number | null)[]): Guess[] {
   if (poly) out.push({ formula: polyText(poly), note: `polynomial of degree ${poly.length - 1}` });
   // 0 for small n, then a polynomial (truncated subtraction)
   if (!poly) {
-    for (let k = 1; k < ys.length - 3; k++) {
+    for (let k = 1; k <= ys.length - 3; k++) {
       if (ys.slice(0, k).every((y) => y === 0) && ys[k] !== 0) {
         const p = polyFit(ys.slice(k - 1), k - 1);
         if (p && p.length === 2) { out.push({ formula: `max(0, ${polyText(p)})`, note: 'truncated at 0' }); break; }

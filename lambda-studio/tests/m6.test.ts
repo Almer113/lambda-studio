@@ -46,7 +46,7 @@ describe('edit actions', () => {
     expect(decodeNumeral(normalize(p.term!).term!)).toBe(3);
   });
   it('adds new definitions and fresh names', () => {
-    expect(rewriteSource('A = λx.x\nA A', 'B A', [{ name: 'B', body: 'λy.y' }])).toBe('A = λx.x\nB = λy.y\nB A\n');
+    expect(rewriteSource('A = λx.x\nA A', 'B A', [{ name: 'B', body: 'λy.y' }])).toBe('A = λx.x\nB = λy.y\nB A');
     expect(freshName('my', new Set(['MY', 'MY2']))).toBe('MY3');
   });
 });

@@ -1,7 +1,7 @@
 // Structural editing of a term at a path ("creator" actions). Every action returns a new
 // term (or null when it does not apply), and the UI writes the result back to the source.
 
-import { type Term, type Path, app, lam, v, free, getAt, replaceAt, maxFree, depthAt } from './term';
+import { type Term, type Path, app, lam, v, free, getAt, replaceAt, maxFree } from './term';
 import { shift, occurs, isEtaRedex, etaContract } from './debruijn';
 import { redexKindAt, stepAt } from './reduce';
 import { definitionTexts } from './formats/named';
@@ -60,9 +60,6 @@ export function applyEdit(t: Term, p: Path, action: EditAction, arg?: Term, name
   }
 }
 
-/** The depth (number of enclosing λs) of the subterm at `p`. */
-export const depthOf = depthAt;
-
 /**
  * Write an edited term back into named-notation source: keep the user's definitions, add new
  * ones, and replace the main expression with `expr`.
@@ -72,7 +69,7 @@ export function rewriteSource(source: string, expr: string, newDefs: { name: str
   const defsText = definitionTexts(source).join('\n');
   const header = source.match(/^(?:\s*(?:--|\/\/|#)[^\n]*\n)*/)?.[0].trimEnd() ?? '';
   const parts = [header, defsText, ...newDefs.map((d) => `${d.name} = ${d.body}`), expr].filter((x) => x.trim() !== '');
-  return parts.join('\n') + '\n';
+  return parts.join('\n');
 }
 
 /** A definition name that is valid and not taken. */

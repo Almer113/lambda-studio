@@ -134,8 +134,8 @@ export const DATA_KINDS: { id: DataKind; name: string; encodings: Encoding[]; pl
   { id: 'list', name: 'List of naturals', encodings: ['church', 'scott'], placeholder: '1, 2, 3', hint: 'Comma-separated numbers (items are Church numerals)' },
   { id: 'string', name: 'String', encodings: ['church', 'scott'], placeholder: 'hi', hint: 'Text: a list of Church-numeral code points' },
   { id: 'pair', name: 'Pair of naturals', encodings: ['church'], placeholder: '3, 4', hint: 'Two comma-separated numbers' },
-  { id: 'maybe', name: 'Maybe natural', encodings: ['scott'], placeholder: '7', hint: 'A number for Just n, empty for Nothing' },
-  { id: 'either', name: 'Either natural', encodings: ['scott'], placeholder: 'L 3', hint: 'L n for Left, R n for Right' },
+  { id: 'maybe', name: 'Maybe natural', encodings: ['scott'], placeholder: 'Just 7', hint: 'Just n (or just n) or Nothing (or leave it empty)' },
+  { id: 'either', name: 'Either natural', encodings: ['scott'], placeholder: 'Left 3', hint: 'Left n or Right n (L n and R n work too)' },
 ];
 
 export const ENCODING_NAMES: Record<Encoding, string> = { church: 'Church', scott: 'Scott', parigot: 'Parigot', binary: 'Binary (bit list)' };
@@ -176,12 +176,18 @@ export function encodeData(kind: DataKind, enc: Encoding, value: string): Term {
       const [a, b] = parts.map((x) => churchNumeral(nat(x)));
       return lam(app(app(v(0), shift(a, 1)), shift(b, 1)), 's');
     }
-    case 'maybe': return value.trim() === '' ? nothing : just(churchNumeral(nat(value)));
+    case 'maybe': {
+      const s = value.trim();
+      if (s === '' || /^nothing$/i.test(s)) return nothing;
+      const m = /^(?:just\s+)?(\S+)$/i.exec(s);
+      if (!m) throw new Error('Expected Just n or Nothing');
+      return just(churchNumeral(nat(m[1])));
+    }
     case 'either': {
-      const m = /^\s*([LR])\s+(\d+)\s*$/i.exec(value);
-      if (!m) throw new Error('Expected L n or R n');
+      const m = /^\s*(left|right|l|r)\s+(\S+)\s*$/i.exec(value);
+      if (!m) throw new Error('Expected Left n or Right n');
       const x = churchNumeral(nat(m[2]));
-      return m[1].toUpperCase() === 'L' ? left(x) : right(x);
+      return m[1][0].toUpperCase() === 'L' ? left(x) : right(x);
     }
   }
 }

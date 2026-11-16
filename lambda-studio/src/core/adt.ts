@@ -24,7 +24,7 @@ export class AdtError extends Error {}
 /** Parse one or more `data T a = C1 f1 f2 | C2 …` declarations (one per line or `;`-separated). */
 export function parseData(src: string): DataDecl[] {
   const decls: DataDecl[] = [];
-  const parts = src.split(/\n(?=\s*data\b)|;/).map((s) => s.replace(/--.*$/gm, '').trim()).filter(Boolean);
+  const parts = src.replace(/--.*$/gm, '').split(/\n(?=\s*data\b)|;/).map((s) => s.trim()).filter(Boolean);
   for (const part of parts) {
     const m = /^data\s+([A-Z][A-Za-z0-9_]*)((?:\s+[a-z][A-Za-z0-9_]*)*)\s*=\s*([\s\S]+)$/.exec(part);
     if (!m) throw new AdtError(`Expected "data Name = Ctor fields | …", got: ${part.slice(0, 60)}`);
@@ -38,6 +38,11 @@ export function parseData(src: string): DataDecl[] {
     }
     const dup = ctors.find((c, i) => ctors.findIndex((d) => d.name === c.name) !== i);
     if (dup) throw new AdtError(`Constructor ${dup.name} appears twice`);
+    for (const c of ctors) {
+      const other = decls.find((d) => d.ctors.some((x) => x.name === c.name));
+      if (other) throw new AdtError(`Constructor ${c.name} is declared in both ${other.name} and ${name}`);
+    }
+    if (decls.some((d) => d.name === name)) throw new AdtError(`Type ${name} is declared twice`);
     decls.push({ name, params: params.trim() ? params.trim().split(/\s+/) : [], ctors });
   }
   if (!decls.length) throw new AdtError('No data declaration found');
@@ -85,8 +90,9 @@ export function generate(decls: DataDecl[], enc: Encoding, reserved: ReadonlySet
   const nameOf = new Map<string, string>();
   for (const d of decls) for (const c of d.ctors) nameOf.set(c.name, reserved.has(upper(c.name)) ? `${upper(c.name)}_${upper(d.name)}` : upper(c.name));
   const upperC = (c: string) => nameOf.get(c) ?? upper(c);
+  const own = (n: string) => { let r = n; while (reserved.has(r)) r += '_'; return r; };
   for (const d of decls) {
-    const caseNames = d.ctors.map((c) => lower(c.name));
+    const caseNames = d.ctors.map((c) => { const n = lower(c.name); return n === 'let' || n === 'in' || n === 'v' ? `${n}_` : n; });
     // de-clash case names that equal type params etc.
     const cs = caseNames.map((n, i) => (caseNames.indexOf(n) !== i ? `${n}${i}` : n));
     const all = cs.join(' ');
@@ -105,22 +111,22 @@ export function generate(decls: DataDecl[], enc: Encoding, reserved: ReadonlySet
       lines.push(`${upperC(c.name)} = λ${binders}.${body}`);
       names.push(upperC(c.name));
     }
-    const elim = enc === 'church' ? 'FOLD' : enc === 'scott' ? 'CASE' : 'REC';
-    lines.push(`${elim}_${upper(d.name)} = λv ${all}.v ${all}   -- ${enc === 'church' ? 'the fold (catamorphism)' : enc === 'scott' ? 'case analysis' : 'primitive recursion'}`);
-    names.push(`${elim}_${upper(d.name)}`);
+    const elim = own(`${enc === 'church' ? 'FOLD' : enc === 'scott' ? 'CASE' : 'REC'}_${upper(d.name)}`);
+    lines.push(`${elim} = λv ${all}.v ${all}   -- ${enc === 'church' ? 'the fold (catamorphism)' : enc === 'scott' ? 'case analysis' : 'primitive recursion'}`);
+    names.push(elim);
     // SIZE: number of constructors in a value (shows how recursion works in each encoding)
-    const size = sizeFunction(d, enc);
+    const size = sizeFunction(d, enc, own(`SIZE_${upper(d.name)}`));
     lines.push(size.line);
     names.push(size.name);
     const ex = example(d, upperC);
-    if (ex) { lines.push(`EXAMPLE_${upper(d.name)} = ${ex}`); names.push(`EXAMPLE_${upper(d.name)}`); }
+    const exName = own(`EXAMPLE_${upper(d.name)}`);
+    if (ex) { lines.push(`${exName} = ${ex}`); names.push(exName); }
     lines.push('');
   }
   return { source: lines.join('\n').trimEnd() + '\n', names };
 }
 
-function sizeFunction(d: DataDecl, enc: Encoding): { name: string; line: string } {
-  const name = `SIZE_${upper(d.name)}`;
+function sizeFunction(d: DataDecl, enc: Encoding, name: string): { name: string; line: string } {
   const cases = d.ctors.map((c) => {
     const taken = new Set<string>(['v']);
     const xs = fieldVars(c, taken);

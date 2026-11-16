@@ -39,7 +39,7 @@ describe('data encodings', () => {
     expect(describeMore(encodeData('string', 'scott', 'hi'))).toContain('Scott string "hi"');
     expect(describeData(encodeData('pair', 'church', '3, 4')).map((d) => d.text)).toContain('pair (3, 4)');
     expect(describeMore(encodeData('maybe', 'scott', '7'))).toContain('Just 7 / Right 7');
-    expect(describeMore(encodeData('either', 'scott', 'L 3'))).toContain('Left 3');
+    expect(describeMore(encodeData('either', 'scott', 'Left 3'))).toContain('Left 3');
     expect(decodeBool(encodeData('bool', 'church', 'false'))).toBe(false);
   });
   it('every data kind encodes its placeholder example', () => {

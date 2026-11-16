@@ -16,19 +16,6 @@ export type CL =
 
 export type Comb = 'S' | 'K' | 'I' | 'B' | 'C' | 'W' | "S'" | 'B*' | "C'" | 'ι';
 
-export const COMBINATORS: { name: Comb; def: string; rule: string }[] = [
-  { name: 'S', def: 'λx y z.x z (y z)', rule: 'S x y z = x z (y z)' },
-  { name: 'K', def: 'λx y.x', rule: 'K x y = x' },
-  { name: 'I', def: 'λx.x', rule: 'I x = x' },
-  { name: 'B', def: 'λx y z.x (y z)', rule: 'B x y z = x (y z)' },
-  { name: 'C', def: 'λx y z.x z y', rule: 'C x y z = x z y' },
-  { name: 'W', def: 'λx y.x y y', rule: 'W x y = x y y' },
-  { name: "S'", def: 'λc f g x.c (f x) (g x)', rule: "S' c f g x = c (f x) (g x)" },
-  { name: 'B*', def: 'λc f g x.c (f (g x))', rule: 'B* c f g x = c (f (g x))' },
-  { name: "C'", def: 'λc f g x.c (f x) g', rule: "C' c f g x = c (f x) g" },
-  { name: 'ι', def: 'λf.f S K', rule: 'ι f = f S K' },
-];
-
 export const C = (n: Comb): CL => ({ t: 'c', n });
 export const A = (f: CL, a: CL): CL => ({ t: 'a', f, a });
 const As = (f: CL, ...xs: CL[]) => xs.reduce(A, f);
@@ -84,7 +71,7 @@ function maxLevel(c: CL): number {
  * (terms and their translations can be thousands of levels deep).
  */
 export function toCL(t: Term, alg: Algorithm = 'turner', limit = 2_000_000): CL {
-  if (alg === 'kiselyov') return kiselyov(t)[1];
+  if (alg === 'kiselyov') return kiselyov(t, limit)[1];
   let budget = limit;
   // Abstraction runs innermost-first, so when abstracting level x every variable left in the term
   // has level <= x: "x occurs in m" is "the highest level in m is x".
@@ -147,14 +134,17 @@ function mkS(p: CL, q: CL, plus: boolean): CL {
 }
 
 /** Kiselyov's compositional translation; returns [context size, combinator term]. */
-function kiselyov(t: Term): [number, CL] {
+function kiselyov(t: Term, limit: number): [number, CL] {
+  // every application node built counts against the budget, as in the other algorithms
+  let budget = limit;
+  const mk = (x: CL, y: CL): CL => { if (--budget < 0) throw new TooLarge('Translation too large'); return A(x, y); };
   // The recursive definition with its tail calls turned into a loop; the inner calls start with
   // a = 0 and so never recurse further.
   const f = (a: number, x: CL, b: number, y: CL): CL => {
     for (;;) {
-      if (a === 0 && b === 0) return A(x, y);
+      if (a === 0 && b === 0) return mk(x, y);
       if (a === 0 && b === 1 && isC(y, 'I')) return x; // η: x (I v) = x v
-      if (a === 0) { x = A(Bc, x); b--; continue; }
+      if (a === 0) { x = mk(Bc, x); b--; continue; }
       if (b === 0) { x = f(0, Cc, a - 1, x); a--; continue; }
       x = f(0, S, a - 1, x); a--; b--;
     }
@@ -163,7 +153,7 @@ function kiselyov(t: Term): [number, CL] {
   while (nodes.length) {
     const n = nodes.pop()!;
     if (post.pop()) {
-      if (n.tag === 'lam') { const [k, e] = out.pop()!; out.push(k === 0 ? [0, A(K, e)] : [k - 1, e]); }
+      if (n.tag === 'lam') { const [k, e] = out.pop()!; out.push(k === 0 ? [0, mk(K, e)] : [k - 1, e]); }
       else { const y = out.pop()!, x = out.pop()!; out.push([Math.max(x[0], y[0]), f(x[0], x[1], y[0], y[1])]); }
       continue;
     }

@@ -11,7 +11,7 @@ import { printNamed } from '../core/formats/named';
 import { X, CornerLeftUp } from 'lucide-react';
 import { IconButton } from './IconButton';
 
-export function describePath(p: Path): string {
+function describePath(p: Path): string {
   if (p === '') return 'the whole term';
   return `${p.length} step${p.length === 1 ? '' : 's'} down`;
 }
@@ -33,7 +33,7 @@ export function EditBar() {
   const sub = useMemo(() => { if (!term || selected === null) return null; try { return getAt(term, selected); } catch { return null; } }, [term, selected]);
   const ok = useMemo(() => (term && selected !== null && sub ? applicable(term, selected, eta) : new Set<EditAction>()), [term, selected, sub, eta]);
   useEffect(() => { setPending(null); setError(null); }, [selected, term]);
-  useEffect(() => { if (pending) input.current?.focus(); }, [pending]);
+  useEffect(() => { if (pending) { input.current?.focus(); input.current?.select(); } }, [pending]);
   if (!term || selected === null || !sub) return null;
 
   const taken = new Set<string>([...program.foldTable.names, ...program.defs.map((d) => d.name)]);

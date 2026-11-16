@@ -19,7 +19,7 @@ export const useHelp = create<{ open: boolean; set(v: boolean): void }>((set) =>
 const SHORTCUTS: [string, string][] = [
   ['\\', 'Type λ in the editor (\\lambda in LaTeX input)'],
   ['Ctrl + Enter', 'Run to normal form'],
-  ['Alt + → / Alt + ←', 'Step forward / back'],
+  ['Alt + → / Alt + ←', 'Step forward / back (in the editor on a Mac: Ctrl + Option + arrows)'],
   ['Double-click', 'Reduce the redex under the pointer (text, TeX or diagram)'],
   ['Click', 'Select a subterm for editing (click again to clear)'],
   ['↑ ↓ ← →', 'With a selection (not on a button or field): parent, first child, previous / next sibling'],
@@ -30,6 +30,7 @@ const SHORTCUTS: [string, string][] = [
   ['?', 'This help'],
 ];
 
+const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 const typing = (el: Element | null) => !!el && (el.closest('input, textarea, select, [contenteditable="true"], .cm-editor, math-field') !== null);
 /**
  * The term-navigation keys (arrows, Enter, Delete) act on the selection only when nothing else
@@ -45,6 +46,8 @@ export function useShortcuts() {
       if (e.defaultPrevented || modalOpen()) return;
       const st = useStore.getState();
       const active = document.activeElement;
+      // in a form field Alt+arrows are left to the field, but must not leave the page (browser Back)
+      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && typing(active) && !IS_MAC) { e.preventDefault(); return; }
       if (e.altKey && e.key === 'ArrowRight' && !typing(active)) { e.preventDefault(); st.stepForward(); return; }
       if (e.altKey && e.key === 'ArrowLeft' && !typing(active)) { e.preventDefault(); st.stepBack(); return; }
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !typing(active)) { e.preventDefault(); st.runToNormal(); return; }

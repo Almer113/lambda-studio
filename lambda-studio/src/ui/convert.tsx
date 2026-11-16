@@ -17,20 +17,14 @@ import { type Term, size } from '../core/term';
 import { encodeData, DATA_KINDS, ENCODING_NAMES, type DataKind, type Encoding } from '../core/data';
 import { TexView, ViewToggle } from './Tex';
 import { reduceInnermost } from './TermText';
-import { useFolder } from './panels';
+import { useFolder, useTexSetting, BIG } from './panels';
 import { NoTerm } from './NoTerm';
 import { ChevronDown, ChevronRight, TextCursorInput, FileInput } from 'lucide-react';
 import { insertIntoSource } from './Toast';
 import { IconButton, CopyButton } from './IconButton';
 
-const BIG = 25000;
 /** Longest text shown in a row (copy still gives everything). */
 const SHOW = 20000;
-
-function useTexSetting(id: string): [boolean, (v: boolean) => void] {
-  const tex = useStore((s) => s.settings.tex[id] ?? false);
-  return [tex, (v: boolean) => { const st = useStore.getState(); st.setSetting('tex', { ...st.settings.tex, [id]: v }); }];
-}
 
 export interface Row { id: string; label: string; text: string; note?: string; mono?: boolean; error?: string; tex?: () => { tagged: string; plain: string } }
 type Group = 'lambda' | 'combinators' | 'code' | 'bits';
@@ -214,11 +208,14 @@ export function DataPanel() {
         <select aria-label="Data type" value={kind} onChange={(e) => { const k = e.target.value as DataKind; setKind(k); setValue(DATA_KINDS.find((x) => x.id === k)!.placeholder); }}>
           {DATA_KINDS.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
         </select>
-        <select aria-label="Encoding" value={encoding} onChange={(e) => setEnc(e.target.value as Encoding)} disabled={info.encodings.length < 2}>
-          {info.encodings.map((x) => <option key={x} value={x}>{ENCODING_NAMES[x]}</option>)}
-        </select>
-        <input aria-label="Value" value={value} placeholder={info.placeholder} onChange={(e) => setValue(e.target.value)} title={info.hint} />
+        {info.encodings.length > 1
+          ? <select aria-label="Encoding" value={encoding} onChange={(e) => setEnc(e.target.value as Encoding)}>
+              {info.encodings.map((x) => <option key={x} value={x}>{ENCODING_NAMES[x]}</option>)}
+            </select>
+          : <span className="muted data-enc">{ENCODING_NAMES[encoding]} encoding</span>}
+        <input aria-label="Value" aria-describedby="data-hint" value={value} placeholder={info.placeholder} onChange={(e) => setValue(e.target.value)} />
       </div>
+      <p id="data-hint" className="muted small">{info.hint}</p>
       {'error' in result ? <div className="out-error">{result.error}</div> : (
         <>
           <pre className="out-text">{result.text!.length > 2000 ? result.text!.slice(0, 2000) + '…' : result.text}</pre>

@@ -48,6 +48,13 @@ const LATEX: Record<string, string> = {
   mathrm: '', mathit: '', mathsf: '', text: '', operatorname: '', textrm: '', mathbf: '',
 };
 
+const GREEK: Record<string, string> = {
+  alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε', varepsilon: 'ε', zeta: 'ζ', eta: 'η', theta: 'θ', vartheta: 'θ',
+  iota: 'ι', kappa: 'κ', mu: 'μ', nu: 'ν', xi: 'ξ', pi: 'π', varpi: 'π', rho: 'ρ', varrho: 'ρ', sigma: 'σ', varsigma: 'ς',
+  tau: 'τ', upsilon: 'υ', phi: 'φ', varphi: 'φ', chi: 'χ', psi: 'ψ', omega: 'ω',
+  Gamma: 'Γ', Delta: 'Δ', Theta: 'Θ', Xi: 'Ξ', Pi: 'Π', Sigma: 'Σ', Upsilon: 'Υ', Phi: 'Φ', Psi: 'Ψ', Omega: 'Ω',
+};
+
 /** Rewrite LaTeX into the plain syntax. */
 export function latexToPlain(src: string): string {
   let s = src;
@@ -55,13 +62,14 @@ export function latexToPlain(src: string): string {
   for (let k = 0; k < 100; k++) {
     const before = s;
     s = s.replace(/\^\s*\{([^{}]*)\}/g, '^($1)')
-      .replace(/_\s*\{[^{}]*\}/g, '')
+      .replace(/_\s*\{\s*([A-Za-z0-9]*)\s*\}/g, (_m, sub: string) => (sub ? `_${sub}` : ''))
       .replace(/\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, '(($1)/($2))')
       .replace(/\\overline\s*\{([^{}]*)\}/g, '¬($1)');
     if (s === before) break;
   }
   s = s.replace(/\\(?:operatorname|mathrm|text|textrm)\s*\{\s*(mod|div|and|or|not|xor)\s*\}/g, ' $1 ');
-  s = s.replace(/\\([A-Za-z]+|[,;:!])/g, (m, name: string) => (name in LATEX ? LATEX[name] : m));
+  s = s.replace(/\\([A-Za-z]+|[,;:!])/g, (m, name: string) => (name in LATEX ? LATEX[name] : name in GREEK ? ` ${GREEK[name]} ` : m));
+  s = s.replace(/_\s*([A-Za-z0-9])/g, '_$1'); // x_ 1 → x_1
   s = s.replace(/[{}]/g, (c) => (c === '{' ? '(' : ')'));
   s = s.replace(/\\/g, ' ');
   return s;
@@ -83,8 +91,11 @@ function tokenize(src: string, splitLetters: boolean): Tok[] {
       let j = i; while (j < src.length && /[A-Za-z0-9_'Ͱ-Ͽ]/.test(src[j])) j++;
       const w = src.slice(i, j);
       if (WORDS[w] !== undefined) { out.push({ t: 'op', v: WORDS[w], pos: i }); i = j; continue; }
-      if (splitLetters && /^[A-Za-z]+$/.test(w)) { for (let k = 0; k < w.length; k++) out.push({ t: 'id', v: w[k], pos: i + k }); }
-      else out.push({ t: 'id', v: w, pos: i });
+      const sub = /^([A-Za-z]+)(_[A-Za-z0-9]+)$/.exec(w);
+      if (splitLetters && (/^[A-Za-z]+$/.test(w) || sub)) {
+        const letters = sub ? sub[1] : w;
+        for (let k = 0; k < letters.length; k++) out.push({ t: 'id', v: letters[k] + (sub && k === letters.length - 1 ? sub[2] : ''), pos: i + k });
+      } else out.push({ t: 'id', v: w, pos: i });
       i = j; continue;
     }
     for (const [sym, name] of SYMBOLS) {
@@ -175,41 +186,49 @@ const SIG: Record<Op, [Ty[], Ty]> = {
 
 export interface Typed { type: Ty; vars: { name: string; type: Ty }[] }
 
-/** Check operand types; variables take the type their first use demands (Boolean if unused). */
+/**
+ * Check operand types. A variable's type comes from any of its uses (the whole expression is
+ * solved first); only a variable that nothing decides gets a default: a number when it is compared
+ * with = or ≠, a truth value otherwise.
+ */
 export function typeOf(e: Expr): Typed {
   const vars = new Map<string, Ty | null>();
   const order: string[] = [];
-  const go = (e: Expr, want: Ty | null): Ty | null => {
+  let changed = false;
+  const go = (e: Expr, want: Ty | null, final: boolean): Ty | null => {
     if (e.k === 'num') return 'num';
     if (e.k === 'bool') return 'bool';
     if (e.k === 'var') {
       if (!vars.has(e.name)) { vars.set(e.name, null); order.push(e.name); }
       const have = vars.get(e.name)!;
       if (have && want && have !== want) throw new ExprError(`${e.name} is used both as a ${have === 'num' ? 'number' : 'Boolean'} and as a ${want === 'num' ? 'number' : 'Boolean'}`);
-      if (!have && want) vars.set(e.name, want);
+      if (!have && want) { vars.set(e.name, want); changed = true; }
       return want ?? have;
     }
     if (e.op === 'eq' || e.op === 'ne') {
-      // = and ≠ also compare truth values (as ↔ and ⊕); the node is rewritten in place
-      let t0 = go(e.args[0], null);
-      const t1 = go(e.args[1], t0);
-      if (!t0 && t1) t0 = go(e.args[0], t1);
-      const ty = t0 ?? t1 ?? 'num';
-      if (!t0) go(e.args[0], ty);
-      if (!t1) go(e.args[1], ty);
+      // = and ≠ also compare truth values (as ↔ and ⊕); in the final pass the node is rewritten in place
+      let t0 = go(e.args[0], null, final);
+      const t1 = go(e.args[1], t0, final);
+      if (!t0 && t1) t0 = go(e.args[0], t1, final);
       if (t0 && t1 && t0 !== t1) throw new ExprError(`${opText(e.op)} compares a number with a truth value`);
-      if (ty === 'bool') (e as { op: Op }).op = e.op === 'eq' ? 'iff' : 'xor';
+      const ty = t0 ?? t1 ?? (final ? 'num' : null);
+      if (ty) {
+        if (!t0) go(e.args[0], ty, final);
+        if (!t1) go(e.args[1], ty, final);
+        if (final && ty === 'bool') (e as { op: Op }).op = e.op === 'eq' ? 'iff' : 'xor';
+      }
       return 'bool';
     }
     const [args, res] = SIG[e.op];
     e.args.forEach((a, k) => {
-      const t = go(a, args[k]);
+      const t = go(a, args[k], final);
       if (t && t !== args[k]) throw new ExprError(`${opText(e.op)} needs ${args[k] === 'num' ? 'numbers' : 'truth values'}`);
     });
     return res;
   };
-  // the equality family also accepts Booleans: a = b on truth values means a ↔ b
-  const t = go(e, null) ?? 'bool';
+  // solve: repeat until no variable gets a type, then apply the defaults
+  do { changed = false; go(e, null, false); } while (changed);
+  const t = go(e, null, true) ?? 'bool';
   return { type: t, vars: order.sort(compareNames).map((name) => ({ name, type: vars.get(name) ?? 'bool' })) };
 }
 const compareNames = (a: string, b: string) => (a.length - b.length) || (a < b ? -1 : a > b ? 1 : 0);

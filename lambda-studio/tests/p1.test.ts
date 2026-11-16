@@ -53,7 +53,7 @@ describe('P1 fixes', () => {
   });
 
   it('rewriting the source keeps definitions that do not parse', () => {
-    expect(rewriteSource('-- hi\nA = λx.x\nB = (λx.\nC = 2\nA C', 'C')).toBe('-- hi\nA = λx.x\nB = (λx.\nC = 2\nC\n');
+    expect(rewriteSource('-- hi\nA = λx.x\nB = (λx.\nC = 2\nA C', 'C')).toBe('-- hi\nA = λx.x\nB = (λx.\nC = 2\nC');
     expect(rewriteSource('A = λx.x\nB = λ@.x\nA', 'A')).toContain('B = λ@.x');
   });
 

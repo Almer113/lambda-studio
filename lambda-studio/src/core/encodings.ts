@@ -74,6 +74,7 @@ export function describe(t: Term, depth = 0): Decoded[] {
   const b = decodeBool(t);
   if (b !== null) out.push({ kind: 'boolean', text: b ? 'TRUE' : 'FALSE' });
   const l = decodeList(t);
+  if (l !== null && l.length === 0) out.push({ kind: 'list', text: 'empty list (NIL)' });
   if (l !== null && l.length > 0) {
     const items = l.map((it) => short(it, depth + 1));
     out.push({ kind: 'list', text: `list [${items.join(', ')}]` });

@@ -34,6 +34,8 @@ export interface Diagram {
   top: number;
   segments: Segment[];
   vars: number;
+  /** Tromp's alternative style: no output line continues below the last link. */
+  alternative?: boolean;
 }
 
 interface Box { w: number; h: number; out: Segment }
@@ -171,7 +173,7 @@ export function layoutAlternative(t: Term): Diagram {
   }
 
   const box = ret;
-  return { width: 4 * box.w - 1, height: box.bottom + 1, top: hasFree ? -1 : 0, segments, vars: box.w };
+  return { width: 4 * box.w - 1, height: box.bottom + 1, top: hasFree ? -1 : 0, segments, vars: box.w, alternative: true };
 }
 
 /** Number of 4-way crossings (a variable line passing through a λ bar it is not bound by). */

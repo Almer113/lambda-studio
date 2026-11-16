@@ -43,7 +43,8 @@ export function inferType(t: Term): InferResult {
     }
   };
   const freeTypes = new Map<string, Type>();
-  // iterative-ish inference with an explicit context list (de Bruijn: index i = ctx[len-1-i])
+  // recursive inference over an explicit context list (de Bruijn: index i = ctx[len-1-i]); very deep
+  // terms are turned away before this runs ("Term too deep to type")
   const infer = (t: Term, ctx: Type[]): Type => {
     switch (t.tag) {
       case 'var': {

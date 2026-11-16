@@ -190,18 +190,6 @@ export function depthAt(path: Path): number {
   return d;
 }
 
-/** For a variable at `path` with index i, the path of the lambda that binds it (or null if free). */
-export function binderPath(path: Path, i: number): Path | null {
-  let remaining = i;
-  for (let k = path.length - 1; k >= 0; k--) {
-    if (path[k] === 'b') {
-      if (remaining === 0) return path.slice(0, k);
-      remaining--;
-    }
-  }
-  return null;
-}
-
 // ---------------------------------------------------------------------------
 // Counts and metrics
 

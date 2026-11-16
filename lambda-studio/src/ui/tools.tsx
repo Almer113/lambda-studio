@@ -9,8 +9,6 @@ import { MathField } from './MathField';
 import { type Term, size } from '../core/term';
 import { parseProgram } from '../core/program';
 import { printNamed } from '../core/formats/named';
-import { normalize } from '../core/nbe';
-import { decodeNumeral, decodeBool } from '../core/encodings';
 import { parseExpr, exprToLambda, exprToTex, evalExpr, typeOf, ExprError } from '../core/algebra/expr';
 import { arityOf, argNames, formulas, formulaToLambda, MAX_TRUTH_VARS, type TruthTable } from '../core/algebra/boolean';
 import { valueText, isPredicate, asNumbers, asBools, guessSequence, guessPredicate, guessBinary, guessBinaryPredicate, type Value, type Guess } from '../core/algebra/numeric';
@@ -58,25 +56,39 @@ export function ToolsPanel() {
 // --- background jobs -----------------------------------------------------------------------
 type Req = ToolRequest extends infer R ? (R extends { id: number } ? Omit<R, 'id'> : never) : never;
 
+/**
+ * Background jobs for one tool. The tool keeps its worker between jobs; a job that is still running
+ * when a new one starts (or on Cancel) is stopped by replacing the worker, the only way to interrupt
+ * it. Results of a superseded job are dropped.
+ */
 function useJob() {
   const worker = useRef<Worker | null>(null);
+  const running = useRef(false);
+  const seq = useRef(0);
   const [busy, setBusy] = useState<{ done: number; total: number } | null>(null);
-  const cancel = () => { worker.current?.terminate(); worker.current = null; setBusy(null); };
-  useEffect(() => cancel, []);
+  const drop = () => { worker.current?.terminate(); worker.current = null; running.current = false; };
+  const cancel = () => { seq.current++; drop(); setBusy(null); };
+  useEffect(() => () => { seq.current++; drop(); }, []);
   const run = (req: Req): Promise<ToolResponse> => {
-    cancel();
-    const w = new ToolsWorker();
-    worker.current = w;
+    if (running.current) drop();
+    const w = worker.current ?? (worker.current = new ToolsWorker());
+    const id = ++seq.current;
+    running.current = true;
     setBusy({ done: 0, total: 0 });
     return new Promise((resolve, reject) => {
       w.onmessage = (e: MessageEvent<ToolResponse>) => {
         const m = unpackDeep(e.data);
+        if (m.id !== id || seq.current !== id) return;
         if (m.type === 'progress') { setBusy({ done: m.done, total: m.total }); return; }
-        w.terminate(); if (worker.current === w) { worker.current = null; setBusy(null); }
+        running.current = false; setBusy(null);
         if (m.type === 'error') reject(new Error(m.message)); else resolve(m);
       };
-      w.onerror = (e) => { w.terminate(); setBusy(null); reject(new Error(e.message || 'Worker failed')); };
-      w.postMessage(packDeep({ ...req, id: 1 }));
+      w.onerror = (e) => {
+        if (seq.current !== id) return;
+        drop(); setBusy(null);
+        reject(new Error(e.message || 'Worker failed'));
+      };
+      w.postMessage(packDeep({ ...req, id }));
     });
   };
   return { run, busy, cancel };
@@ -145,24 +157,38 @@ function ExpressionTool() {
       const e = parseExpr(input);
       const typed = typeOf(e);
       const lambda = exprToLambda(e);
-      let value: { direct: string; lambda: string; agree: boolean | null } | null = null;
-      if (!typed.vars.length) {
-        let direct: number | boolean | null = null, err: string | null = null;
-        try { direct = evalExpr(e); } catch (x) { err = (x as Error).message; }
-        if (err) value = { direct: err, lambda: '', agree: null };
-        else if (typeof direct === 'number' && direct > 5000) value = { direct: String(direct), lambda: 'too large to build as a Church numeral', agree: null };
-        else {
-          const t = parseProgram(lambda, 'named').term;
-          const n = t ? normalize(t, 2_000_000) : null;
-          const got = n?.term ? (typeof direct === 'number' ? decodeNumeral(n.term) : decodeBool(n.term)) : null;
-          value = { direct: String(direct), lambda: got === null ? 'no value within the limit' : String(got), agree: got === null ? null : got === direct };
-        }
-      }
-      return { ok: true as const, tex: exprToTex(e), lambda, typed, value };
+      // a closed expression: its value computed directly, to compare with the λ-term's
+      let direct: { value: number | boolean } | { error: string } | null = null;
+      if (!typed.vars.length) { try { direct = { value: evalExpr(e) }; } catch (x) { direct = { error: (x as Error).message }; } }
+      return { ok: true as const, tex: exprToTex(e), lambda, typed, direct };
     } catch (x) {
       return { ok: false as const, error: x instanceof ExprError ? x.message : String(x) };
     }
   }, [input]);
+
+  // the λ-term's value, normalized in the background (after a short pause in typing)
+  const job = useJob();
+  const [got, setGot] = useState<{ lambda: string; value: number | boolean | null } | null>(null);
+  const directValue = r.ok && r.direct && 'value' in r.direct ? r.direct.value : null;
+  useEffect(() => {
+    setGot(null);
+    if (!r.ok || directValue === null || (typeof directValue === 'number' && directValue > 5000)) { job.cancel(); return; }
+    const t = parseProgram(r.lambda, 'named').term;
+    if (!t) return;
+    const lambda = r.lambda;
+    const timer = setTimeout(() => {
+      job.run({ type: 'value', term: t, as: typeof directValue === 'number' ? 'num' : 'bool', fuel: 2_000_000 })
+        .then((m) => { if (m.type === 'value') setGot({ lambda, value: m.value }); })
+        .catch(() => setGot({ lambda, value: null }));
+    }, 200);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [r]);
+  const value = !r.ok || !r.direct ? null
+    : 'error' in r.direct ? { direct: r.direct.error, lambda: '', agree: null }
+    : typeof r.direct.value === 'number' && r.direct.value > 5000 ? { direct: String(r.direct.value), lambda: 'too large to build as a Church numeral', agree: null }
+    : !got || got.lambda !== r.lambda ? { direct: String(r.direct.value), lambda: job.busy ? 'computing…' : '…', agree: null }
+    : { direct: String(r.direct.value), lambda: got.value === null ? 'no value within the limit' : String(got.value), agree: got.value === null ? null : got.value === r.direct.value };
 
   const send = (tab: ToolsTab) => { if (r.ok) { actions.use(r.lambda); setSetting('toolsTab', tab); } };
   return (
@@ -184,10 +210,10 @@ function ExpressionTool() {
           <dl className="stats">
             <dt>λ-term</dt><dd><Code text={r.lambda} /></dd>
             {r.typed.vars.length > 0 && <><dt>Inputs</dt><dd>{r.typed.vars.map((v) => `${v.name} : ${v.type === 'num' ? 'number' : 'truth value'}`).join(', ')} → {r.typed.type === 'num' ? 'number' : 'truth value'}</dd></>}
-            {r.value && <><dt>Value</dt><dd>
-              {r.value.direct}{r.value.lambda && <> · λ-term gives <b>{r.value.lambda}</b></>}
-              {r.value.agree === true && <span className="ok"> ✓ agrees</span>}
-              {r.value.agree === false && <span className="err"> ✗ disagrees</span>}
+            {value && <><dt>Value</dt><dd>
+              {value.direct}{value.lambda && <> · λ-term gives <b>{value.lambda}</b></>}
+              {value.agree === true && <span className="ok"> ✓ agrees</span>}
+              {value.agree === false && <span className="err"> ✗ disagrees</span>}
             </dd></>}
           </dl>
           {r.typed.vars.length > 0 && (

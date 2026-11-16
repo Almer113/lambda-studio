@@ -79,7 +79,7 @@ export function App() {
   };
   return (
     <div className="app" data-tab={tab}>
-      <Header />
+      <Guard name="The header" compact><Header /></Guard>
       <TabList tabs={MOBILE_TABS} value={tab} onChange={setTab} label="Sections" idPrefix="mobile" className="tabs" />
       <main className="layout" id="mobile-panel">
         <aside className="col-left"><Guard name="Library"><Library /></Guard><Guard name="Encode data"><DataPanel /></Guard></aside>
@@ -105,8 +105,8 @@ export function App() {
         </aside>
       </main>
       <Guard name="Export"><ExportDialog /></Guard>
-      <Tutorial />
-      <Help />
+      <Guard name="The tutorial" compact><Tutorial /></Guard>
+      <Guard name="Help" compact><Help /></Guard>
       <Toast />
     </div>
   );
