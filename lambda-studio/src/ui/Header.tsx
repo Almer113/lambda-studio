@@ -1,9 +1,9 @@
-// The header: File menu, examples, input format and evaluation options on the left; settings,
+// The header: File menu, examples, input format and the strategy menu on the left; settings,
 // tutorial, help and theme on the right. On a phone the options move into a "more" menu.
 
 import {
   File as FileIcon, FilePlus, FolderOpen, Save, Share2, Download, Settings as SettingsIcon, GraduationCap, CircleHelp,
-  Sun, Moon, Monitor, Ellipsis, RotateCcw, Check, BookOpen,
+  Sun, Moon, Monitor, Ellipsis, RotateCcw, Check, BookOpen, Route,
 } from 'lucide-react';
 import { useStore, shareLink, DEFAULT_SETTINGS, type Theme } from './store';
 import { useExport } from './ExportDialog';
@@ -100,22 +100,40 @@ function InputSelect() {
   );
 }
 
-/** Strategy, η and single-letter reading: they change what the term means or how it reduces. */
-function EvalOptions() {
+/** The reduction strategy and η: how Step and Run choose the next redex. */
+function StrategyOptions() {
   const strategy = useStore((s) => s.settings.strategy);
   const eta = useStore((s) => s.settings.eta);
-  const single = useStore((s) => s.settings.singleLetter);
   const setSetting = useStore((s) => s.setSetting);
   return (
-    <>
-      <label className="field">Strategy
-        <select value={strategy} onChange={(e) => setSetting('strategy', e.target.value as Strategy)}>
-          {STRATEGIES.map((st) => <option key={st.id} value={st.id} title={st.description}>{st.name}</option>)}
-        </select>
+    <div className="strategy-panel">
+      <fieldset>
+        <legend>Reduction strategy</legend>
+        {STRATEGIES.map((st) => (
+          <label key={st.id} className="radio-row">
+            <input type="radio" name="strategy" value={st.id} checked={strategy === st.id} onChange={() => setSetting('strategy', st.id as Strategy)} />
+            <span><b>{st.name}</b><span className="muted">{st.description}</span></span>
+          </label>
+        ))}
+      </fieldset>
+      <label className="check radio-row">
+        <input type="checkbox" checked={eta} onChange={(e) => setSetting('eta', e.target.checked)} />
+        <span><b>η-reduction</b><span className="muted">Also contract λx.M x to M (x not free in M).</span></span>
       </label>
-      <label className="check" title="Also contract η-redexes λx.M x → M"><input type="checkbox" checked={eta} onChange={(e) => setSetting('eta', e.target.checked)} aria-label="η-reduction: also contract λx.M x to M" /> η</label>
-      <label className="check" title="Read λxy.xy as λx.λy.x y"><input type="checkbox" checked={single} onChange={(e) => setSetting('singleLetter', e.target.checked)} /> Single-letter vars</label>
-    </>
+    </div>
+  );
+}
+
+/** The header button for the strategy: its name says the current choice. */
+function StrategyMenu() {
+  const strategy = useStore((s) => s.settings.strategy);
+  const eta = useStore((s) => s.settings.eta);
+  const name = STRATEGIES.find((st) => st.id === strategy)?.name ?? strategy;
+  const text = eta ? `${name} + η` : name;
+  return (
+    <Popover icon={Route} label={`Reduction strategy: ${text}`} text={text} className="strategy-menu">
+      {() => <StrategyOptions />}
+    </Popover>
   );
 }
 
@@ -149,8 +167,9 @@ function SettingsPanel({ close }: { close(): void }) {
         </label>
       </fieldset>
       <fieldset>
-        <legend>Editor</legend>
+        <legend>Editor and input</legend>
         <label className="check"><input type="checkbox" checked={s.autoLambda} onChange={(e) => setSetting('autoLambda', e.target.checked)} /> Type \ to get λ</label>
+        <label className="check"><input type="checkbox" checked={s.singleLetter} onChange={(e) => setSetting('singleLetter', e.target.checked)} /> Single-letter variables (read λxy.xy as λx.λy.x y)</label>
       </fieldset>
       <fieldset>
         <legend>Limits for Run</legend>
@@ -177,7 +196,7 @@ export function Header() {
         <InputSelect />
       </div>
       <div className="header-group wide-only">
-        <EvalOptions />
+        <StrategyMenu />
       </div>
       <div className="header-group header-end">
         <Popover icon={SettingsIcon} label="Settings" align="right">{(close) => <SettingsPanel close={close} />}</Popover>
@@ -189,7 +208,7 @@ export function Header() {
         <Popover icon={Ellipsis} label="More options" align="right" className="narrow-only">
           {(close) => (
             <div className="more-panel">
-              <EvalOptions />
+              <StrategyOptions />
               <div className="more-actions">
                 <IconButton icon={GraduationCap} text="Tutorial" label="Tutorial" pressed={tutorialOpen} onClick={() => { close(); useTutorial.getState().set({ open: !tutorialOpen }); }} />
                 <IconButton icon={CircleHelp} text="Help" label="Help and keyboard shortcuts" onClick={() => { close(); useHelp.getState().set(true); }} />

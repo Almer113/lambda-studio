@@ -196,3 +196,16 @@ test('a selection dims the rest of the diagram and boxes the selected part', asy
   await expect(page.locator('.diagram-svg .dimmed')).toHaveCount(0); // the whole term: nothing to dim
   await expect(page.locator('.diagram-svg rect.hl-select')).toHaveCount(1);
 });
+
+test('the strategy menu sets the strategy and η, and its button says the choice', async ({ page }) => {
+  await open(page);
+  const button = page.getByRole('button', { name: /^Reduction strategy:/ });
+  await expect(button).toHaveText('Normal order');
+  await button.click();
+  await page.getByRole('radio', { name: /Applicative order/ }).check();
+  await page.getByRole('checkbox', { name: /η-reduction/ }).check();
+  await page.keyboard.press('Escape');
+  await expect(button).toHaveText('Applicative order + η');
+  expect(await page.evaluate(() => { const s = (window as any).__store.getState().settings; return [s.strategy, s.eta]; })).toEqual(['applicative', true]);
+  await page.evaluate(() => (window as any).__store.getState().replaceSettings());
+});

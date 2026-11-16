@@ -98,6 +98,10 @@ export function CurrentTerm() {
 }
 
 // --- Controls ----------------------------------------------------------------
+const SPEEDS = [1, 2, 4, 8, 16, 30];
+/** The speed choices, with a saved value that is not one of them kept in its place. */
+const speeds = (cur: number) => (SPEEDS.includes(cur) ? SPEEDS : [...SPEEDS, cur].sort((a, b) => a - b));
+
 export function Controls() {
   // only what the controls show: hover and selection changes do not re-render them
   const s = useStore(useShallow((st) => ({
@@ -118,20 +122,23 @@ export function Controls() {
   return (
     <div className="controls">
       <div className="buttons">
-        <IconButton icon={SkipBack} label="Back to the start" onClick={() => s.goto(0)} disabled={s.index === 0 || !!s.running} />
+        <IconButton icon={SkipBack} text="Start" label="Back to the start" onClick={() => s.goto(0)} disabled={s.index === 0 || !!s.running} />
         <IconButton icon={StepBack} text="Back" label="Step back" shortcut="Alt+←" onClick={s.stepBack} disabled={s.index === 0 || !!s.running} />
         <IconButton icon={StepForward} className="primary" text="Step" label="One reduction step" shortcut="Alt+→" onClick={() => s.stepForward()} disabled={!term || (atEnd && !hasNext) || !!s.running} />
         <IconButton icon={s.playing ? Pause : Play} text={s.playing ? 'Pause' : 'Play'} label={s.playing ? 'Pause' : 'Play steps automatically'} pressed={s.playing} onClick={() => s.setPlaying(!s.playing)} disabled={!term || !!s.running || (atEnd && !hasNext)} />
         <IconButton icon={FastForward} text="Run" label="Reduce to normal form, recording the steps" shortcut="Ctrl+Enter" onClick={s.runToNormal} disabled={!term || !!s.running || !hasNext} />
         <IconButton icon={Zap} text="Normalize" label="Fast normalizer (result only, no step history)" onClick={s.normalizeFast} disabled={!term || !!s.running || !hasNext} />
         {s.running && <IconButton icon={Square} className="danger" text="Stop" label="Stop the evaluation" onClick={s.stop} />}
-        <label className="speed">
-          <input type="range" min={1} max={30} value={s.playSpeed} onChange={(e) => s.setSetting('playSpeed', Number(e.target.value))} aria-label="Play speed, steps per second" />
-          <span aria-hidden>{s.playSpeed}/s</span>
+        <label className="speed" title="Play speed">Speed
+          <select value={s.playSpeed} onChange={(e) => s.setSetting('playSpeed', Number(e.target.value))} aria-label="Play speed, steps per second">
+            {speeds(s.playSpeed).map((v) => <option key={v} value={v}>{v} / s</option>)}
+          </select>
         </label>
       </div>
       <div className="timeline">
-        <input type="range" min={0} max={Math.max(0, s.historyLength - 1)} value={s.index} onChange={(e) => s.goto(Number(e.target.value))} disabled={s.historyLength < 2 || !!s.running} aria-label="Reduction timeline" />
+        <div className="tl-track" style={{ '--steps': Math.max(1, s.historyLength - 1) } as React.CSSProperties} data-marks={s.historyLength > 1 && s.historyLength <= 80 ? '' : undefined}>
+          <input type="range" min={0} max={Math.max(0, s.historyLength - 1)} value={s.index} onChange={(e) => s.goto(Number(e.target.value))} disabled={s.historyLength < 2 || !!s.running} aria-label="Reduction timeline" aria-valuetext={`step ${s.index} of ${Math.max(0, s.historyLength - 1)}`} />
+        </div>
         <span className="tl-label">step {s.index} / {Math.max(0, s.historyLength - 1)}</span>
       </div>
       {s.running && <div className="status running">{s.running.kind === 'run' ? `Reducing… ${s.running.steps} steps, ${s.running.size} nodes` : 'Normalizing…'}</div>}
