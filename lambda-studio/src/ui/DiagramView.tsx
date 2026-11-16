@@ -346,12 +346,12 @@ export function DiagramView() {
           </div>
         )}
         {dropAt && <div className="drop-hint">Drop to replace this {dropAt.kind === 'var' ? 'variable' : dropAt.kind === 'lam' ? 'abstraction' : 'application'}</div>}
-        {redex !== null && diagram && !useCanvas && (
-          <div className="legend">
-            <span className="sw hl-fn" /> function λ and its variables <span className="sw hl-arg" /> argument <span className="sw hl-link" /> application · double-click a link to reduce · drag to pan · Ctrl+wheel to zoom
-          </div>
-        )}
       </div>
+      {redex !== null && diagram && !useCanvas && (
+        <div className="legend">
+          <span className="sw hl-fn" /> function λ and its variables <span className="sw hl-arg" /> argument <span className="sw hl-link" /> application · double-click a link to reduce · drag to pan · Ctrl+wheel to zoom
+        </div>
+      )}
     </div>
   );
 }

@@ -113,6 +113,8 @@ export function Help() {
             <h3>Syntax</h3>
             <p><code>λx y.M</code> or <code>\x y -&gt; M</code> · application <code>f x y</code> = <code>(f x) y</code> · definitions <code>NAME = term</code> (recursive definitions are compiled with Y) · numbers are Church numerals · <code>[1, 2]</code> lists · <code>"text"</code> strings · <code>let x = M in N</code> · comments <code>--</code>.</p>
             <p className="muted">The user guide and the format reference are in the <code>docs/</code> folder of the project.</p>
+            <h3>Settings</h3>
+            <p>Settings are kept in this browser. <button onClick={() => { useStore.getState().replaceSettings(); useStore.setState({ message: { text: 'Settings were reset to their defaults.', tone: 'info' } }); set(false); }}>Reset settings</button> <span className="muted">(your source is kept)</span></p>
           </div>
         )}
       </dialog>

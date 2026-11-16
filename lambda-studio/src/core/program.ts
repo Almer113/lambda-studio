@@ -2,7 +2,7 @@
 // with definitions, diagnostics and source spans.
 
 import { type Term, type Path } from './term';
-import { parseStatements, Resolver, ParseError, type DefSource, type Diagnostic, type Span, printNamed } from './formats/named';
+import { parseStatements, definedNames, Resolver, ParseError, type DefSource, type Diagnostic, type Span, printNamed } from './formats/named';
 import { parseDeBruijn, printDeBruijn, deBruijnClosedUnder } from './formats/debruijn';
 import { decodeBLC, encodeBLC } from './formats/blc';
 import { parseJSON, printJSON } from './formats/json';
@@ -97,7 +97,17 @@ export function preludeTerm(name: string): Term {
 }
 
 // --- detection --------------------------------------------------------------
+/**
+ * Bits that can start a closed BLC term: it begins with a λ (00) or an application (01), so numbers
+ * such as 1000, 1111 or `10 11` stay numerals. (Incomplete bits still count, so that while BLC is
+ * being typed its errors are BLC errors.)
+ */
+function looksLikeBLC(s: string): boolean {
+  return /^[01\s]+$/.test(s) && /^0[01]/.test(s) && s.replace(/\s/g, '').length >= 4;
+}
+
 export function detectFormat(src: string, defaultBase: 0 | 1 = 1): FormatId {
+  const based = /(?:--|\/\/|#)\s*([01])-based\b/i.exec(src);
   const s = src.replace(/(--|\/\/|#).*$/gm, '').trim();
   if (s.startsWith('{')) return 'json';
   if (/^0x[0-9a-f]/i.test(s)) return 'blc8';
@@ -109,12 +119,13 @@ export function detectFormat(src: string, defaultBase: 0 | 1 = 1): FormatId {
   if (/^`/.test(s) && /^[`skiSKI\s]+$/.test(s.replace(/#.*$/gm, ''))) return 'unlambda';
   if (/^\*/.test(s) && /^[*i\s]+$/.test(s)) return 'iota';
   if (/^[SKIBCWι()\s'*]+$/.test(s) && /[SKIBCWι]/.test(s) && !/[λ\\]/.test(s)) return 'ski';
-  if (/^[01\s]+$/.test(s) && s.replace(/\s/g, '').length >= 4) return 'blc';
+  if (looksLikeBLC(s)) return 'blc';
   if (/[λ\\]/.test(s) && /^[λ\\().\s0-9]+$/.test(s) && /[0-9]/.test(s)) {
     if (/(^|[^0-9])0([^0-9]|$)/.test(s)) return 'debruijn0';
     const c0 = deBruijnClosedUnder(s, 0), c1 = deBruijnClosedUnder(s, 1);
     if (c1 && !c0) return 'debruijn1';
     if (c0 && !c1) return 'debruijn0';
+    if (based) return based[1] === '0' ? 'debruijn0' : 'debruijn1';
     return defaultBase === 0 ? 'debruijn0' : 'debruijn1';
   }
   return 'named';
@@ -193,7 +204,7 @@ function parseViaNamed(n: Normalized, inner: FormatId, opts: ProgramOptions, bas
 
 function parseNamedProgram(src: string, opts: ProgramOptions, base: Program): Program {
   const prelude = preludeDefs();
-  const known = new Set<string>(prelude.keys());
+  const known = new Set<string>([...prelude.keys(), ...(opts.singleLetter ? definedNames(src) : [])]);
   const { statements, diagnostics } = parseStatements(src, { singleLetter: opts.singleLetter, knownNames: known });
   const defs = new Map<string, DefSource>();
   for (const [k, d] of prelude) defs.set(k, d);
@@ -209,13 +220,11 @@ function parseNamedProgram(src: string, opts: ProgramOptions, base: Program): Pr
     if (idx >= 0) user.splice(idx, 1);
     user.push(d);
   }
-  // user definitions shadow prelude ones, so they need fresh resolution state; copy prelude entries
-  // only when a user definition overrides something they depend on (rare): keep it simple and
-  // re-resolve everything if any prelude name is shadowed.
-  if (user.some((u) => prelude.has(u.name))) {
-    for (const [k, d] of prelude) if (defs.get(k) === d) defs.set(k, { name: d.name, node: d.node, origin: 'prelude' });
-  }
-  const r: Resolver = new Resolver(defs, (): Term => r.resolveDef('Y'));
+  // User definitions shadow library ones in the user's own code only: library definitions keep
+  // their library meaning (they are resolved once, in the prelude), and recursion is always
+  // compiled with the library's Y, so redefining Y or SUCC cannot break FACT or LENGTH.
+  const fixpoint = prelude.get('Y')!.term!;
+  const r: Resolver = new Resolver(defs, (): Term => fixpoint);
   for (const u of user) {
     try { r.resolveDef(u.name); }
     catch (e) {
@@ -240,23 +249,33 @@ function parseNamedProgram(src: string, opts: ProgramOptions, base: Program): Pr
     if (last.span) base.spans.set('', { from: last.node.from, to: last.node.to });
   }
   // fold table: prelude + user definitions
+  // (a library name the user redefined is not used: it would mean something else in their code)
   let foldTable = base.foldTable;
-  if (user.some((u) => u.term)) {
+  if (user.length) {
     foldTable = new FoldTable();
-    for (const u of user) if (u.term && u.name !== mainName) foldTable.add(u.name, u.term);
-    for (const e of PRELUDE) if (e.fold) foldTable.add(e.name, prelude.get(e.name)!.term!);
+    for (const u of user) if (u.term && u.name !== mainName) foldTable.add(u.name, u.term, true);
+    for (const e of PRELUDE) if (e.fold && defs.get(e.name)?.origin === 'prelude') foldTable.add(e.name, prelude.get(e.name)!.term!);
   }
   const defInfos: DefInfo[] = user.map((u) => ({ name: u.name, origin: 'user', term: u.term ?? null, error: u.error, recursive: u.recursive, span: u.span }));
   return { ...base, term, diagnostics, defs: defInfos, mainName, foldTable };
 }
 
 // --- printing in any format -----------------------------------------------
+/**
+ * 0-based de Bruijn text. Without an index 0 it would read back as 1-based (`λλ1` is K 0-based but
+ * FALSE 1-based), so such text carries a `-- 0-based` comment that detection honours.
+ */
+export function printDeBruijn0(t: Term): string {
+  const text = printDeBruijn(t, 0).text;
+  return detectFormat(text) === 'debruijn0' ? text : `${text}   -- 0-based`;
+}
+
 export interface PrintTermOptions { algorithm?: Algorithm }
 
 export function printTerm(t: Term, fmt: FormatId, opts: PrintTermOptions = {}): string {
   switch (fmt) {
     case 'named': return printNamed(t).text;
-    case 'debruijn0': return printDeBruijn(t, 0).text;
+    case 'debruijn0': return printDeBruijn0(t);
     case 'debruijn1': return printDeBruijn(t, 1).text;
     case 'latex': return printLatex(t);
     case 'blc': return encodeBLC(t);

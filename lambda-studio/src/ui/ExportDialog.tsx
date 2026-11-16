@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { create } from 'zustand';
-import { useStore, currentTerm, DEFAULT_SETTINGS, type Settings } from './store';
+import { useStore, currentTerm, type Settings } from './store';
+import { FORMATS, type FormatId } from '../core/program';
 import { layoutSafe } from './render';
 import { toSVG } from '../core/diagram/svg';
 import { toTikZ, toTypst } from '../core/diagram/vector';
@@ -14,6 +15,7 @@ import { useIsDark } from './theme';
 import { useFolder } from './panels';
 import { planVideo, encodeGif, encodeWebm, webmSupported, type VideoOptions } from './video';
 import { download } from './DiagramView';
+import { NumberField } from './NumberField';
 
 type Tab = 'diagram' | 'animation' | 'text' | 'workspace';
 
@@ -208,9 +210,9 @@ function AnimationExport() {
           <option value="gif">GIF</option>
           <option value="webm" disabled={!webmSupported()}>WebM video{webmSupported() ? '' : ' (not supported here)'}</option>
         </select></label>
-        <label>Steps <input type="number" min={0} max={last} value={lo} onChange={(e) => setFrom(Number(e.target.value))} /> to <input type="number" min={0} max={last} value={hi} onChange={(e) => setTo(Number(e.target.value))} /></label>
+        <label>Steps <NumberField min={0} max={last} value={lo} onChange={setFrom} /> to <NumberField min={0} max={last} value={hi} onChange={setTo} /></label>
         <label>Size <select value={maxPx} onChange={(e) => setMaxPx(Number(e.target.value))}>{[240, 360, 480, 720, 1080].map((k) => <option key={k} value={k}>{k} px</option>)}</select></label>
-        <label>Seconds per step <input type="number" min={0.2} max={4} step={0.1} value={perStep} onChange={(e) => setPerStep(Math.max(0.2, Number(e.target.value)))} /></label>
+        <label>Seconds per step <NumberField min={0.2} max={4} step={0.1} value={perStep} onChange={setPerStep} /></label>
         <label className="check"><input type="checkbox" checked={dark} onChange={(e) => setDark(e.target.checked)} /> Dark colours</label>
       </div>
       <p className="muted">
@@ -310,9 +312,9 @@ function WorkspaceExport() {
       const w = JSON.parse(await f.text()) as Partial<Workspace>;
       if (w.app !== 'lambda-studio' || typeof w.source !== 'string') throw new Error('Not a Lambda Studio workspace file.');
       const st = useStore.getState();
-      for (const [k, v] of Object.entries(w.settings ?? {})) if (k in DEFAULT_SETTINGS) st.setSetting(k as keyof Settings, v as never);
-      if (w.format) st.setFormat(w.format as never);
-      st.setSource(w.source);
+      st.replaceSettings({ ...st.settings, ...(w.settings && typeof w.settings === 'object' ? w.settings : {}) });
+      const format = FORMATS.some((x) => x.id === w.format) ? (w.format as FormatId) : 'auto';
+      st.setSource(w.source, format);
       setMsg({ text: `Loaded ${f.name}.`, tone: 'ok' });
     } catch (e) { setMsg({ text: (e as Error).message, tone: 'err' }); }
   };

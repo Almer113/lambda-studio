@@ -162,7 +162,7 @@ describe('BLC8', () => {
   it('packs and unpacks bytes', () => {
     const bits = '0000011100111010'; // Church 2
     const bytes = bitsToBytes(bits);
-    expect(bytesToHex(bytes)).toBe('07 3a');
+    expect(bytesToHex(bytes)).toBe('0x07 0x3a');
     expect(bytesToBits(parseBytes('0x07 0x3a'))).toBe(bits);
     expect(bytesToBits(parseBytes(bytesToBase64(bytes)))).toBe(bits);
     expect(equal(P('0x07 0x3a'), churchNumeral(2))).toBe(true);

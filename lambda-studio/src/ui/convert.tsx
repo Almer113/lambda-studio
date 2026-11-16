@@ -4,6 +4,7 @@ import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useStore, currentTerm } from './store';
 import { printNamed } from '../core/formats/named';
 import { printDeBruijn } from '../core/formats/debruijn';
+import { printDeBruijn0 } from '../core/program';
 import { encodeBLC, bitsToHex } from '../core/formats/blc';
 import { bitsToBytes, bytesToHex, bytesToBase64 } from '../core/formats/blc8';
 import { printJSON } from '../core/formats/json';
@@ -62,7 +63,7 @@ function lambdaRows(term: Term, fold: ReturnType<typeof useFolder>['fold'], avoi
     row('named', 'Named (with names)', () => printNamed(term, { fold, avoid }).text, { tex: texOf('named', true) }),
     row('expanded', 'Named (expanded)', () => printNamed(term).text, { tex: texOf('named', false) }),
     row('ascii', 'Named (ASCII \\)', () => printNamed(term, { lambda: '\\' }).text),
-    row('debruijn0', 'De Bruijn (0-based)', () => printDeBruijn(term, 0).text, { tex: texOf('debruijn0', false) }),
+    row('debruijn0', 'De Bruijn (0-based)', () => printDeBruijn0(term), { tex: texOf('debruijn0', false) }),
     row('debruijn1', 'De Bruijn (1-based, Tromp)', () => printDeBruijn(term, 1).text, { tex: texOf('debruijn1', false) }),
     row('latex', 'LaTeX source', () => printLatex(term, { fold, avoid }), { note: '⌜n⌝ needs amssymb' }),
   ];
@@ -103,7 +104,7 @@ export function Conversions() {
   const algorithm = useStore((s) => s.settings.clAlgorithm);
   const open = useStore((s) => s.settings.openGroups);
   const setSetting = useStore((s) => s.setSetting);
-  const { fold, avoid } = useFolder();
+  const { fold, avoid } = useFolder(term);
   const [force, setForce] = useState(false);
   useEffect(() => setForce(false), [term]);
   const tooBig = !!term && size(term) > BIG && !force;
@@ -231,7 +232,7 @@ export function DataPanel() {
           <pre className="out-text">{result.text!.length > 2000 ? result.text!.slice(0, 2000) + '…' : result.text}</pre>
           <div className="buttons">
             <button onClick={() => insert?.(`(${result.text})`)}>Insert</button>
-            <button onClick={() => setSource(result.text!)}>Use as source</button>
+            <button onClick={() => setSource(result.text!, 'auto')}>Use as source</button>
             <span className="sub">{result.size} nodes</span>
           </div>
         </>

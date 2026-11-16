@@ -41,7 +41,13 @@ function point(selector: string) {
   setTimeout(() => el.classList.remove('tut-focus'), 2200);
 }
 
+/** Closed, the tutorial subscribes to nothing: goals are checked only while it is open. */
 export function Tutorial() {
+  const open = useTutorial((t) => t.open);
+  return open ? <TutorialDrawer /> : null;
+}
+
+function TutorialDrawer() {
   const t = useTutorial();
   const st = useStore();
   const lesson = LESSONS[Math.min(t.lesson, LESSONS.length - 1)];
@@ -50,11 +56,12 @@ export function Tutorial() {
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const key = `${lesson.id}:${t.step}`;
 
-  useEffect(() => { if (reached && !t.done[key]) t.set({ done: { ...t.done, [key]: true } }); }, [reached, key]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (!t.open) return null;
+  // a step with a goal is done when the goal is reached; a step without one, when it was shown
+  const met = step.goal ? reached : true;
+  useEffect(() => { if (met && !t.done[key]) t.set({ done: { ...t.done, [key]: true } }); }, [met, key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const load = () => {
-    if (step.load !== undefined) { st.setFormat('auto'); st.setSource(step.load); }
+    if (step.load !== undefined) st.setSource(step.load, 'auto');
     if (step.tool) st.setSetting('toolsTab', step.tool);
     if (step.focus) setTimeout(() => point(step.focus!), 50);
     setLoadedKey(key);
@@ -62,7 +69,7 @@ export function Tutorial() {
   const go = (lessonIdx: number, stepIdx: number) => { t.set({ lesson: lessonIdx, step: stepIdx }); setLoadedKey(null); };
   const next = () => (t.step + 1 < lesson.steps.length ? go(t.lesson, t.step + 1) : t.lesson + 1 < LESSONS.length ? go(t.lesson + 1, 0) : t.set({ open: false }));
   const prev = () => (t.step > 0 ? go(t.lesson, t.step - 1) : t.lesson > 0 ? go(t.lesson - 1, LESSONS[t.lesson - 1].steps.length - 1) : undefined);
-  const lessonDone = (i: number) => LESSONS[i].steps.every((s, k) => !s.goal || t.done[`${LESSONS[i].id}:${k}`]);
+  const lessonDone = (i: number) => LESSONS[i].steps.every((_, k) => t.done[`${LESSONS[i].id}:${k}`]);
   const last = t.lesson === LESSONS.length - 1 && t.step === lesson.steps.length - 1;
 
   return (

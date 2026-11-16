@@ -6,7 +6,7 @@ import { packDeep, unpackDeep } from '../core/pack';
 
 export type WorkerRequest =
   | { id: number; type: 'run'; term: Term; opts: ReduceOptions; maxSteps: number; maxSize: number; record: number }
-  | { id: number; type: 'normalize'; term: Term; fuel: number };
+  | { id: number; type: 'normalize'; term: Term; fuel: number; eta?: boolean };
 
 export type WorkerResponse =
   | { id: number; type: 'progress'; steps: number; size: number }
@@ -28,7 +28,7 @@ self.onmessage = (e: MessageEvent<WorkerRequest>) => {
     });
     post({ id: req.id, type: 'run-done', term: r.term, steps: r.steps, status: r.status, message: r.message, history: r.history, maxSizeSeen: r.maxSizeSeen, cycleLength: r.cycleLength });
   } else {
-    const r = normalize(req.term, req.fuel);
+    const r = normalize(req.term, req.fuel, req.eta);
     post({ id: req.id, type: 'normalize-done', term: r.term, betas: r.betas, status: r.status, message: r.message, size: r.term ? size(r.term) : 0 });
   }
 };

@@ -1,4 +1,4 @@
-import { type Term, type Lam, maxFree, rewrite, v } from './term';
+import { type Term, type Lam, maxFree, rewrite, v, lam, app } from './term';
 
 /** Add d to every variable index >= cutoff. */
 export function shift(t: Term, d: number, cutoff = 0): Term {
@@ -43,3 +43,25 @@ export const isEtaRedex = (t: Term): t is Lam =>
   t.tag === 'lam' && t.body.tag === 'app' && t.body.arg.tag === 'var' && t.body.arg.i === 0 && !occurs(t.body.fn, 0);
 
 export const etaContract = (t: Lam): Term => shift((t.body as { fn: Term }).fn, -1);
+
+/** Contract every η-redex, innermost first (iteratively: terms can be very deep). */
+export function etaNormal(t: Term): Term {
+  const nodes: Term[] = [t], post: boolean[] = [false], out: Term[] = [];
+  while (nodes.length) {
+    const n = nodes.pop()!, done = post.pop()!;
+    if (!done) {
+      if (n.tag === 'var' || n.tag === 'free') { out.push(n); continue; }
+      nodes.push(n); post.push(true);
+      if (n.tag === 'lam') { nodes.push(n.body); post.push(false); }
+      else { nodes.push(n.arg, n.fn); post.push(false, false); }
+    } else if (n.tag === 'lam') {
+      const b = out.pop()!;
+      const l = b === n.body ? n : lam(b, n.hint);
+      out.push(isEtaRedex(l) ? etaContract(l) : l);
+    } else if (n.tag === 'app') {
+      const a = out.pop()!, f = out.pop()!;
+      out.push(f === n.fn && a === n.arg ? n : app(f, a));
+    }
+  }
+  return out[0];
+}

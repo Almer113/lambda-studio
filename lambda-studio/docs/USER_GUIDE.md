@@ -30,7 +30,9 @@ let two = 2 in PLUS two two
 [1, 2, 3]   "hi"        -- Church lists of numerals and of character codes
 ```
 
-Numbers are Church numerals. Names in capitals come from the library, and your definitions shadow library ones. With **Single-letter vars** on, `λxy.xy` reads as `λx.λy.x y`.
+Numbers are Church numerals. Names in capitals come from the library. Your definitions shadow library ones in your own code, while library definitions keep their library meaning (redefining `SUCC` does not change `LENGTH`), and recursion is always compiled with the library's Y. With **Single-letter vars** on, `λxy.xy` reads as `λx.λy.x y` (the names you define are kept whole).
+
+The current term shows closed parts by name (your definitions first, then numerals and library names). At step 0, what you typed is shown as you typed it: only names and numbers you wrote are kept as names.
 
 Paste a term in another notation and the input format is detected (the Input menu shows what was detected, and you can pin a format). See [FORMATS.md](FORMATS.md).
 
@@ -86,5 +88,7 @@ Dragging a library name onto a diagram line replaces that subterm with the defin
 - **Animation:** GIF or WebM of any range of recorded steps.
 - **Text & code:** reduction traces (named, de Bruijn, LaTeX `align*`), a Markdown summary, Tromp's `.lam`, `.blc` bits and `.blc8` bytes.
 - **Workspace:** save the source, input format and settings as JSON, and open it again later.
+
+Settings are kept in this browser; **Reset settings** in the Help dialog (**?**) restores the defaults.
 
 **Share link** copies a URL with the source compressed into it (where the browser does not allow copying, the link is shown instead). Nothing is sent to a server: the whole app runs in your browser. Opening a share link replaces your source; the status bar then offers to restore the previous one, and the link is removed from the address bar so a later reload keeps your newer work.

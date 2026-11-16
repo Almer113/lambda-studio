@@ -185,7 +185,11 @@ function splitStatements(toks: Token[]): Token[][] {
   const out: Token[][] = [];
   let cur: Token[] = [];
   let depth = 0;
-  for (const tok of toks) {
+  for (let k = 0; k < toks.length; k++) {
+    const tok = toks[k];
+    // `NAME =` at column 0 always starts a definition, even after an unclosed bracket, so one
+    // broken definition does not swallow the ones after it
+    if (tok.bol && cur.length > 0 && tok.kind === 'id' && toks[k + 1]?.kind === 'eq') depth = 0;
     if (depth === 0 && (tok.kind === 'semi' || (tok.bol && cur.length > 0))) {
       if (cur.length) out.push(cur);
       cur = [];
@@ -197,6 +201,36 @@ function splitStatements(toks: Token[]): Token[][] {
   }
   if (cur.length) out.push(cur);
   return out;
+}
+
+/**
+ * The source text of every definition (`NAME = …`), in order, whether or not it parses: used to
+ * keep the user's definitions, broken ones included, when the main expression is rewritten.
+ */
+export function definitionTexts(src: string): string[] {
+  try {
+    return splitStatements(lex(src))
+      .filter((g) => g.length >= 2 && g[0].kind === 'id' && g[1].kind === 'eq')
+      .map((g) => src.slice(g[0].from, g[g.length - 1].to).trimEnd());
+  } catch {
+    // the text does not even lex: keep lines that start a definition, with their indented continuations
+    const out: string[] = [];
+    let cur: string[] | null = null;
+    for (const line of src.split('\n')) {
+      if (/^[\p{L}_][\p{L}\p{N}_'₀-₉]*\s*=/u.test(line)) { cur = [line]; out.push(''); }
+      else if (cur && /^\s+\S/.test(line)) cur.push(line);
+      else cur = null;
+      if (cur) out[out.length - 1] = cur.join('\n').trimEnd();
+    }
+    return out;
+  }
+}
+
+/** The names defined in the source (so that single-letter mode does not split them). */
+export function definedNames(src: string): string[] {
+  try {
+    return splitStatements(lex(src)).filter((g) => g.length >= 2 && g[0].kind === 'id' && g[1].kind === 'eq').map((g) => g[0].text);
+  } catch { return []; }
 }
 
 export function parseStatements(src: string, opts: ParseOptions = {}): { statements: Statement[]; diagnostics: Diagnostic[] } {
@@ -339,7 +373,7 @@ export interface PrintOptions {
   lambda?: string;
   multiArg?: boolean;
   /** Return a display name for a (closed) subterm, or null to print it structurally. */
-  fold?: (t: Term) => string | null;
+  fold?: (t: Term, path: Path) => string | null;
   /** Names that must not be used for bound variables (e.g. definition names used by fold). */
   avoid?: ReadonlySet<string>;
 }
@@ -369,7 +403,7 @@ export function printNamed(t: Term, opts: PrintOptions = {}): Printed {
   const visit = (n: Term, path: Path, pos: 'top' | 'fn' | 'arg') => {
     const start = out.length;
     const finish = () => spans.push({ path, from: start, to: out.length });
-    const folded = fold && n.tag !== 'var' && n.tag !== 'free' ? fold(n) : null;
+    const folded = fold && n.tag !== 'var' && n.tag !== 'free' ? fold(n, path) : null;
     if (folded !== null) {
       out += folded;
       finish();
@@ -393,7 +427,7 @@ export function printNamed(t: Term, opts: PrintOptions = {}): Printed {
         out += name;
         const body: Term = (cur as { body: Term }).body;
         p += 'b';
-        if (multi && body.tag === 'lam' && !(fold && fold(body) !== null)) { cur = body; continue; }
+        if (multi && body.tag === 'lam' && !(fold && fold(body, p) !== null)) { cur = body; continue; }
         out += '.';
         tasks.push(() => {
           for (const s of inner) spans.push({ path: s.path, from: s.from, to: out.length });
@@ -407,7 +441,7 @@ export function printNamed(t: Term, opts: PrintOptions = {}): Printed {
     } else {
       tasks.push(finish);
       const a = n.arg;
-      const needParen = (a.tag === 'app' || a.tag === 'lam') && !(fold && fold(a) !== null);
+      const needParen = (a.tag === 'app' || a.tag === 'lam') && !(fold && fold(a, path + 'a') !== null);
       if (needParen && a.tag === 'app') { text(')'); emit(a, path + 'a', 'top'); text('('); }
       else emit(a, path + 'a', a.tag === 'lam' && needParen ? 'arg' : 'top');
       text(' ');

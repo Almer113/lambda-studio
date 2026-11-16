@@ -15,8 +15,9 @@ export function bytesToBits(bytes: Uint8Array): string {
   return s;
 }
 
+/** `0x07 0x3a`: the 0x prefix makes the text read back as bytes (`07 3a` would look like numbers). */
 export function bytesToHex(bytes: Uint8Array): string {
-  return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join(' ');
+  return [...bytes].map((b) => '0x' + b.toString(16).padStart(2, '0')).join(' ');
 }
 
 const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';

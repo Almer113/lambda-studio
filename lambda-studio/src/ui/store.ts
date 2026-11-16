@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import { type Term, type Path } from '../core/term';
-import { parseProgram, FORMATS, type FormatId, type Program } from '../core/program';
-import { findRedex, stepAt, redexKindAt, type Strategy, type RedexKind } from '../core/reduce';
+import { parseProgram, detectFormat, FORMATS, type FormatId, type Program } from '../core/program';
+import { findRedex, stepAt, redexKindAt, STRATEGIES, type Strategy, type RedexKind } from '../core/reduce';
+import { COLOR_MODES } from '../core/diagram/colors';
+import { ALGORITHMS } from '../core/combinators';
 import type { WorkerRequest, WorkerResponse } from '../worker/eval.worker';
 import EvalWorker from '../worker/eval.worker?worker&inline';
 import type { Algorithm } from '../core/combinators';
@@ -60,6 +62,45 @@ export const DEFAULT_SETTINGS: Settings = {
   mathEditor: false,
 };
 
+const ENUMS: Partial<Record<keyof Settings, readonly string[]>> = {
+  strategy: STRATEGIES.map((x) => x.id),
+  zeroAs: ['0', 'FALSE'],
+  colorMode: COLOR_MODES.map((x) => x.id),
+  diagramStyle: ['standard', 'alternative'],
+  theme: ['system', 'light', 'dark'],
+  clAlgorithm: ALGORITHMS.map((x) => x.id),
+  toolsTab: ['expr', 'truth', 'table', 'laws', 'data', 'generate'],
+};
+const RANGES: Partial<Record<keyof Settings, [number, number]>> = {
+  maxSteps: [1, 10_000_000], maxSize: [100, 50_000_000], playSpeed: [0.25, 60],
+};
+
+/** Valid settings from stored or imported data: unknown keys are dropped, bad values reset. */
+export function sanitizeSettings(raw: unknown): Settings {
+  const out: Settings = { ...DEFAULT_SETTINGS, tex: { ...DEFAULT_SETTINGS.tex }, openGroups: { ...DEFAULT_SETTINGS.openGroups } };
+  if (!raw || typeof raw !== 'object') return out;
+  const r = raw as Record<string, unknown>;
+  const o = out as unknown as Record<string, unknown>;
+  for (const k of Object.keys(DEFAULT_SETTINGS) as (keyof Settings)[]) {
+    const val = r[k], def = DEFAULT_SETTINGS[k];
+    if (val === undefined) continue;
+    const allowed = ENUMS[k];
+    if (allowed) { if (typeof val === 'string' && allowed.includes(val)) o[k] = val; continue; }
+    if (typeof def === 'boolean') { if (typeof val === 'boolean') o[k] = val; continue; }
+    if (typeof def === 'number') {
+      const [lo, hi] = RANGES[k] ?? [-Infinity, Infinity];
+      if (typeof val === 'number' && val >= lo && val <= hi) o[k] = val;
+      continue;
+    }
+    if (val && typeof val === 'object' && !Array.isArray(val)) {
+      const rec: Record<string, boolean> = { ...(def as Record<string, boolean>) };
+      for (const [kk, vv] of Object.entries(val)) if (typeof vv === 'boolean') rec[kk] = vv;
+      o[k] = rec;
+    }
+  }
+  return out;
+}
+
 export interface Entry {
   term: Term;
   /** How this entry was produced from the previous one. */
@@ -86,9 +127,12 @@ interface State {
   /** Select a range of the source in the editor and focus it (registered by the editor). */
   revealSource: ((from: number, to: number) => void) | null;
 
-  setSource(s: string): void;
+  /** Replace the source; pass a format (usually 'auto') when the new text is not the user's typing. */
+  setSource(s: string, format?: FormatId | 'auto'): void;
   setFormat(f: FormatId | 'auto'): void;
   setSetting<K extends keyof Settings>(k: K, v: Settings[K]): void;
+  /** Replace all settings (validated); with no argument, restore the defaults. */
+  replaceSettings(s?: unknown): void;
   setHover(p: Path | null, from?: 'diagram' | 'text'): void;
   select(p: Path | null): void;
   /** Apply a structural edit to the current term and write the result back to the source. */
@@ -174,9 +218,9 @@ function compile(source: string, format: FormatId | 'auto', settings: Settings):
 }
 
 export const useStore = create<State>((set, get) => {
-  const settings: Settings = { ...DEFAULT_SETTINGS, ...(initial.settings ?? {}) };
-  const source = initial.source ?? DEFAULT_SOURCE;
-  const format = initial.format ?? 'auto';
+  const settings: Settings = sanitizeSettings(initial.settings);
+  const source = typeof initial.source === 'string' ? initial.source : DEFAULT_SOURCE;
+  const format: FormatId | 'auto' = initial.format && (initial.format === 'auto' || FORMATS.some((f) => f.id === initial.format)) ? initial.format : 'auto';
   const program = compile(source, format, settings);
 
   const reset = (p: Program) => ({ program: p, history: p.term ? [{ term: p.term }] : [], index: 0, playing: false, message: null });
@@ -194,10 +238,11 @@ export const useStore = create<State>((set, get) => {
     source, format, settings, ...reset(program),
     hover: null, hoverSource: null, selected: null, running: null, insertText: null, revealSource: null,
 
-    setSource(s) {
+    setSource(s, f) {
       if (get().running) get().stop();
-      const p = compile(s, get().format, get().settings);
-      set({ source: s, ...reset(p), selected: null });
+      const format = f ?? get().format;
+      const p = compile(s, format, get().settings);
+      set({ source: s, format, ...reset(p), selected: null });
       save(get());
     },
     setFormat(f) {
@@ -211,6 +256,12 @@ export const useStore = create<State>((set, get) => {
       const settings = { ...get().settings, [k]: v };
       set({ settings });
       if (k === 'singleLetter') set(reset(compile(get().source, get().format, settings)));
+      save(get());
+    },
+    replaceSettings(raw) {
+      stopRun();
+      const settings = sanitizeSettings(raw);
+      set({ settings, ...reset(compile(get().source, get().format, settings)) });
       save(get());
     },
     setHover(p, from) { set({ hover: p, hoverSource: p === null ? null : from ?? null }); },
@@ -227,10 +278,14 @@ export const useStore = create<State>((set, get) => {
       const named = st.program.format === 'named' || st.program.format === 'haskell';
       const src = rewriteSource(named ? st.source : '', printNamed(next, { fold, avoid }).text, newDefs);
       if (st.running) st.stop();
-      const prog = compile(src, 'auto', st.settings);
+      // The rewritten source is named notation. Keep a pinned Named/Haskell format; with 'auto',
+      // keep it only if the new text is detected as named (a bare numeral like 1000 is not BLC).
+      const format: FormatId | 'auto' = st.format === 'haskell' ? 'haskell'
+        : st.format === 'auto' && detectFormat(src) === 'named' ? 'auto' : 'named';
+      const prog = compile(src, format, st.settings);
       let keep: Path | null = null;
       if (prog.term) { try { getAt(prog.term, p); keep = p; } catch { keep = null; } }
-      set({ source: src, format: 'auto', ...reset(prog), selected: keep, message: { text: `Edited: ${action}. The source was rewritten from the current term.`, tone: 'info' } });
+      set({ source: src, format, ...reset(prog), selected: keep, message: { text: `Edited: ${action}. The source was rewritten from the current term.`, tone: 'info' } });
       save(get());
       return null;
     },
@@ -310,7 +365,7 @@ export const useStore = create<State>((set, get) => {
           set({ running: null, message: { text: `Normal form via fast normalizer (${m.betas} β-steps with sharing, ${m.size} nodes).`, tone: 'info' } });
         } else set({ running: null, message: { text: m.message ?? 'Failed', tone: 'error' } });
       }, failed);
-      const req: WorkerRequest = { id, type: 'normalize', term: cur, fuel: settings.maxSteps * 100 };
+      const req: WorkerRequest = { id, type: 'normalize', term: cur, fuel: settings.maxSteps * 100, eta: settings.eta };
       w.postMessage(packDeep(req));
     },
     stop() {

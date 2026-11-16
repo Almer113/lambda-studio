@@ -7,6 +7,7 @@
 // uses a task stack. Terms can be tens of thousands of levels deep.
 
 import { type Term, app, lam, v, free, maxFree } from './term';
+import { etaNormal } from './debruijn';
 
 interface Thunk { val?: Val; term?: Term; env?: Env }
 type Env = { head: Thunk; tail: Env } | null;
@@ -33,7 +34,8 @@ type Task =
   | { q: 'lam'; hint?: string }
   | { q: 'app' };
 
-export function normalize(t: Term, fuel = 1_000_000): NormalizeResult {
+/** eta: also contract η-redexes (η-reducing a β-normal form gives the βη-normal form). */
+export function normalize(t: Term, fuel = 1_000_000, eta = false): NormalizeResult {
   let betas = 0;
   const lookup = (env: Env, i: number): Thunk => {
     let e = env;
@@ -119,7 +121,8 @@ export function normalize(t: Term, fuel = 1_000_000): NormalizeResult {
 
   try {
     // Free indices at top level are treated as neutral variables beyond the root.
-    const term = quote(evaluate(t, openEnv(t)));
+    const nf = quote(evaluate(t, openEnv(t)));
+    const term = eta ? etaNormal(nf) : nf;
     return { term, betas, status: 'normal' };
   } catch (e) {
     if (e instanceof OutOfFuel) return { term: null, betas, status: 'fuel', message: `Gave up after ${fuel} β-steps (fuel limit).` };
@@ -128,11 +131,11 @@ export function normalize(t: Term, fuel = 1_000_000): NormalizeResult {
   }
 }
 
-// Open terms: dangling indices become free names "_k".
+// Open terms: dangling index k is a neutral variable at level -(k+1), below the root, so that
+// read-back at level L turns it into index L + k: it stays the same dangling variable.
 function openEnv(t: Term): Env {
   const max = maxFree(t);
-  // env index 0 (innermost) is _0, index 1 is _1, ...
   let env: Env = null;
-  for (let k = max - 1; k >= 0; k--) env = { head: { val: { k: 'neu', head: `_${k}`, spine: [] } }, tail: env };
+  for (let k = max - 1; k >= 0; k--) env = { head: { val: { k: 'neu', head: -(k + 1), spine: [] } }, tail: env };
   return env;
 }

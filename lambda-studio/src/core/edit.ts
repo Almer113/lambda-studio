@@ -4,7 +4,7 @@
 import { type Term, type Path, app, lam, v, free, getAt, replaceAt, maxFree, depthAt } from './term';
 import { shift, occurs, isEtaRedex, etaContract } from './debruijn';
 import { redexKindAt, stepAt } from './reduce';
-import { parseStatements } from './formats/named';
+import { definitionTexts } from './formats/named';
 
 export type EditAction = 'abstract' | 'unwrap' | 'apply' | 'pass' | 'replace' | 'delete' | 'eta-expand' | 'eta-reduce' | 'beta' | 'fold';
 
@@ -68,12 +68,8 @@ export const depthOf = depthAt;
  * ones, and replace the main expression with `expr`.
  */
 export function rewriteSource(source: string, expr: string, newDefs: { name: string; body: string }[] = []): string {
-  let defsText = '';
-  try {
-    const { statements } = parseStatements(source);
-    const lines = statements.filter((s) => s.kind === 'def').map((s) => source.slice(s.from, s.to).trimEnd());
-    defsText = lines.join('\n');
-  } catch { /* source not in named notation: drop it */ }
+  // definitions with errors are kept too: an edit must not delete the user's work
+  const defsText = definitionTexts(source).join('\n');
   const header = source.match(/^(?:\s*(?:--|\/\/|#)[^\n]*\n)*/)?.[0].trimEnd() ?? '';
   const parts = [header, defsText, ...newDefs.map((d) => `${d.name} = ${d.body}`), expr].filter((x) => x.trim() !== '');
   return parts.join('\n') + '\n';

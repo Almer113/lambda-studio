@@ -6,7 +6,7 @@ import { printNamed, type Printed } from '../core/formats/named';
 import { makeFolder } from '../core/fold';
 import { findRedex, STRATEGIES, type Strategy } from '../core/reduce';
 import { termStats } from '../core/stats';
-import { size } from '../core/term';
+import { size, type Term, type Path } from '../core/term';
 import { FORMATS, preludeInfo, type FormatId } from '../core/program';
 import { EXAMPLES } from '../core/prelude';
 import { describeMore } from '../core/data';
@@ -26,13 +26,31 @@ function useTexSetting(id: string): [boolean, (v: boolean) => void] {
 
 const BIG = 25000;
 
-export function useFolder() {
+/** A name or a number: the only things that may be folded at a place where the user typed them. */
+const ONE_TOKEN = /^(?:[\p{L}_][\p{L}\p{N}_'₀-₉]*|[0-9]+)$/u;
+
+/**
+ * The display folder (names and numerals for closed subterms). Pass the term being shown when it
+ * may be the one the user typed: there, a part is folded only if the user wrote it as a single
+ * name or number, so `λt f.t` stays as typed instead of turning into TRUE.
+ */
+export function useFolder(shown?: Term | null) {
   const program = useStore((s) => s.program);
   const settings = useStore((s) => s.settings);
-  return useMemo(() => ({
-    fold: settings.foldNames ? makeFolder(program.foldTable, { numerals: settings.numerals, zeroAs: settings.zeroAs }) : undefined,
-    avoid: program.foldTable.names,
-  }), [program, settings.foldNames, settings.numerals, settings.zeroAs]);
+  const source = useStore((s) => s.source);
+  const typed = !!shown && shown === program.term;
+  return useMemo(() => {
+    const avoid = program.foldTable.names;
+    if (!settings.foldNames) return { fold: undefined, avoid };
+    const base = makeFolder(program.foldTable, { numerals: settings.numerals, zeroAs: settings.zeroAs });
+    if (!typed) return { fold: base, avoid };
+    const fold = (t: Term, path: Path) => {
+      const sp = program.spans.get(path);
+      if (sp && !ONE_TOKEN.test(source.slice(sp.from, sp.to).trim())) return null;
+      return base(t);
+    };
+    return { fold, avoid };
+  }, [program, settings.foldNames, settings.numerals, settings.zeroAs, typed, source]);
 }
 
 // --- Current term ------------------------------------------------------------
@@ -41,7 +59,7 @@ export function CurrentTerm() {
   const settings = useStore((s) => s.settings);
   const index = useStore((s) => s.index);
   const history = useStore((s) => s.history);
-  const { fold, avoid } = useFolder();
+  const { fold, avoid } = useFolder(term);
   const printed = useMemo<Printed | null>(() => (term && size(term) < BIG * 4 ? printNamed(term, { fold, avoid }) : null), [term, fold, avoid]);
   const redex = useMemo(() => (term && settings.showRedex ? findRedex(term, settings) : null), [term, settings]);
   const via = history[index]?.via;
@@ -221,7 +239,7 @@ export function Header() {
     <header className="header">
       <div className="brand"><span className="logo">λ</span> Lambda Studio</div>
       <div className="header-controls">
-        <select aria-label="Examples" value="" onChange={(e) => { const ex = EXAMPLES[Number(e.target.value)]; if (ex) s.setSource(ex.src); }}>
+        <select aria-label="Examples" value="" onChange={(e) => { const ex = EXAMPLES[Number(e.target.value)]; if (ex) s.setSource(ex.src, 'auto'); }}>
           <option value="">Examples…</option>
           {EXAMPLES.map((ex, i) => <option key={ex.name} value={i}>{ex.name}</option>)}
         </select>

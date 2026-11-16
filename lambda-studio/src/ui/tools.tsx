@@ -22,6 +22,7 @@ import { packDeep, unpackDeep } from '../core/pack';
 import type { ToolRequest, ToolResponse, EnumItem } from '../worker/tools.worker';
 import ToolsWorker from '../worker/tools.worker?worker&inline';
 import type { BBResult } from '../core/generate';
+import { NumberField } from './NumberField';
 
 const TABS: { id: ToolsTab; name: string; title: string }[] = [
   { id: 'expr', name: 'Expression → λ', title: 'Arithmetic and Boolean expressions as λ-terms' },
@@ -89,11 +90,10 @@ function Busy({ busy, cancel, label }: { busy: { done: number; total: number } |
 
 function useActions() {
   const setSource = useStore((s) => s.setSource);
-  const setFormat = useStore((s) => s.setFormat);
   const insert = useStore((s) => s.insertText);
   const source = useStore((s) => s.source);
   return {
-    use: (src: string) => { setFormat('auto'); setSource(src); },
+    use: (src: string) => setSource(src, 'auto'),
     insert: (src: string) => insert?.(src),
     append: (src: string) => setSource(`${source.trimEnd()}\n\n${src}`),
   };
@@ -236,7 +236,7 @@ function TruthTool() {
     <div className="tool">
       <p className="muted">Applies the current term to every combination of TRUE and FALSE and reads the results. Try XOR, IMPLIES or an expression from the first tab.</p>
       <div className="tool-row">
-        <label>Inputs <input type="number" min={0} max={MAX_TRUTH_VARS} value={inputs} onChange={(e) => setN(Math.max(0, Math.min(MAX_TRUTH_VARS, Number(e.target.value))))} /></label>
+        <label>Inputs <NumberField min={0} max={MAX_TRUTH_VARS} value={inputs} onChange={setN} /></label>
         {ar.n > MAX_TRUTH_VARS && <span className="muted">(the term takes {ar.n} arguments; showing {MAX_TRUTH_VARS})</span>}
       </div>
       <Busy busy={busy} cancel={cancel} label="Evaluating rows" />
@@ -304,7 +304,7 @@ function TableTool() {
       <p className="muted">Applies the current term to Church numerals and decodes the results. Try FACT, FIB, λn.MULT n n or an expression from the first tab.{ar === 0 && ' The current term takes no arguments.'}</p>
       <div className="tool-row">
         <label>Arguments <select value={arity} onChange={(e) => setArity(Number(e.target.value) as 1 | 2)}><option value={1}>1: f(n)</option><option value={2}>2: f(m, n)</option></select></label>
-        <label>Up to <input type="number" min={2} max={arity === 1 ? 30 : 12} value={max} onChange={(e) => setNum(Math.max(2, Math.min(arity === 1 ? 30 : 12, Number(e.target.value))))} /></label>
+        <label>Up to <NumberField min={2} max={arity === 1 ? 30 : 12} value={max} onChange={setNum} /></label>
       </div>
       <Busy busy={busy} cancel={cancel} label="Evaluating" />
       {error && <p className="err">{error}</p>}
@@ -463,7 +463,7 @@ function GenerateTool() {
     <div className="tool">
       <p className="muted">Closed terms measured in binary λ-calculus bits (λ = 2, application = 2, variable i = i + 1 bits for 1-based i). The counts are OEIS A114852.</p>
       <div className="tool-row">
-        <label>Size <input type="number" min={4} max={2000} value={n} onChange={(e) => setN(Math.max(0, Math.min(2000, Number(e.target.value))))} /> bits</label>
+        <label>Size <NumberField min={4} max={2000} value={n} onChange={setN} /> bits</label>
         <span><b>{count.toLocaleString('en')}</b> closed term{count === 1n ? '' : 's'}</span>
       </div>
       <details className="counts">
