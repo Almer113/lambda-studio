@@ -184,3 +184,15 @@ test('an error falls back to the last definition and says so; an empty source of
   await page.locator('.starters .chip', { hasText: '2 + 3' }).click();
   await page.waitForFunction(() => (window as any).__store.getState().source === 'PLUS 2 3');
 });
+
+test('a selection dims the rest of the diagram and boxes the selected part', async ({ page }) => {
+  await open(page);
+  await setSource(page, 'PLUS 2 3');
+  await expect(page.locator('.diagram-svg .halo rect').first()).toBeAttached(); // the next redex glows
+  await page.evaluate(() => (window as any).__store.getState().select('fa'));
+  await expect(page.locator('.diagram-svg .dimmed')).toHaveCount(1);
+  await expect(page.locator('.diagram-svg rect.hl-select')).toHaveCount(1);
+  await page.evaluate(() => (window as any).__store.getState().select(''));
+  await expect(page.locator('.diagram-svg .dimmed')).toHaveCount(0); // the whole term: nothing to dim
+  await expect(page.locator('.diagram-svg rect.hl-select')).toHaveCount(1);
+});

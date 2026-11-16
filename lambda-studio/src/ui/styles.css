@@ -153,6 +153,12 @@ kbd { border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 
 .sw.hl-fn, rect.hl-fn { background: var(--hl-fn); fill: var(--hl-fn); }
 .sw.hl-arg, rect.hl-arg { background: var(--hl-arg); fill: var(--hl-arg); }
 .sw.hl-link, rect.hl-link { background: var(--hl-link); fill: var(--hl-link); }
+/* the redex glow: soft colour around the lines, which keep their own colour */
+.halo rect { opacity: 0.45; }
+.sw.glow { width: 12px; height: 12px; border-radius: var(--r-sm); background: none; box-shadow: inset 0 0 0 3px var(--sw-c); }
+.sw.glow.hl-fn { --sw-c: color-mix(in srgb, var(--hl-fn) 55%, transparent); }
+.sw.glow.hl-arg { --sw-c: color-mix(in srgb, var(--hl-arg) 55%, transparent); }
+.sw.glow.hl-link { --sw-c: color-mix(in srgb, var(--hl-link) 55%, transparent); }
 rect.hl-hover { fill: var(--hl-hover); }
 
 .conv-group { border-top: 1px solid var(--border); padding-top: 4px; margin-top: 4px; }
@@ -297,7 +303,9 @@ table.values.grid td { border-left: 1px solid var(--border); }
 }
 
 /* --- creator --- */
-rect.hl-select { fill: none; stroke: var(--accent); stroke-width: 0.6; }
+rect.hl-select { fill: none; stroke: var(--accent); stroke-width: 1.5px; }
+/* a selection dims the rest of the diagram */
+.dimmed { opacity: 0.22; }
 rect.hl-drop { fill: var(--ok); opacity: 0.8; }
 .tx-select { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: var(--r-sm); }
 .drop-hint { position: absolute; left: 8px; top: 6px; font-size: var(--fs-xs); background: var(--ok); color: var(--on-ok); padding: 2px 8px; border-radius: var(--r-sm); pointer-events: none; }

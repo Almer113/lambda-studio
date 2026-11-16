@@ -41,7 +41,7 @@ Paste a term in another notation and the input format is detected (the Input men
 
 ## Reducing
 
-- **Step** contracts one redex chosen by the **Strategy** (normal order by default). The next redex is highlighted: function λ and its variables in pink, argument in blue, the application in yellow.
+- **Step** contracts one redex chosen by the **Strategy** (normal order by default). The next redex is highlighted. In the text it is shaded. In the diagram it glows behind the lines, which keep their own colours: a pink glow for its function λ and that λ's variables, blue for the argument and yellow for the application link.
 - **Double-click** a redex in the text, the TeX view or the diagram to contract that one instead.
 - **Play** steps automatically at the speed set by the slider. **Run** reduces to normal form in the background, recording up to 2000 steps; **Normalize** uses a much faster engine with sharing and records only the result.
 - The **timeline** goes back to any earlier step. From there, Step and Play move forward along the recorded steps; contracting a redex of your choice (double-click, or β-reduce in the edit bar) starts a new branch, and Run or Normalize continue from that step and replace what came after it. An edit rewrites the source, so it starts a new timeline.
@@ -54,7 +54,7 @@ Paste a term in another notation and the input format is detected (the Input men
 Each λ is a horizontal bar, each variable a vertical line from its binder's bar, each application a horizontal link between the function's and the argument's leftmost lines. The **Alternative** style is Tromp's compact variant.
 
 - Hover a line to highlight the matching part of the term (and the other way round).
-- Click a line to select its subterm; Ctrl + wheel or pinch to zoom (the zoom buttons zoom about the centre); drag to pan; the fit button fits the drawing again.
+- Click a line to select its subterm (the rest of the diagram dims and the selected part gets a box); Ctrl + wheel or pinch to zoom (the zoom buttons zoom about the centre); drag to pan; the fit button fits the drawing again.
 - Colour modes: by binder, by depth, by kind, or monochrome.
 - With the film button (animate) on, each single β-step morphs smoothly from the old diagram to the new one. The crosshair button shows or hides the next redex.
 - Above about 6000 lines the diagram is drawn on a canvas. Hover and selection still work; zoomed out, lines blend into a grey overview.

@@ -191,15 +191,27 @@ export function DiagramView() {
     } else {
       for (const [col, p] of canvasData.paths) { ctx.fillStyle = col; ctx.fill(p); }
     }
-    // highlights: selection and hover (whole subterm), drawn at least one screen pixel wide
+    // the selection, drawn at least one screen pixel wide (hover has its own canvas)
     const minPx = 1 / (view.scale * dpr);
-    const mark = (pred: (s: Segment) => boolean, fill: string) => {
-      ctx.fillStyle = fill;
-      for (const s of diagram.segments) if (pred(s)) { const r = segmentRect(s); ctx.fillRect(r.x, r.y, Math.max(r.w, minPx), Math.max(r.h, minPx)); }
-    };
     const css = getComputedStyle(el);
-    if (selected !== null) mark((s) => s.path.startsWith(selected), css.getPropertyValue('--accent').trim() || '#5b4bd6');
-  }, [canvasData, diagram, view, selected]);
+    if (selected !== null) {
+      const inSel = (s: Segment) => s.path.startsWith(selected);
+      if (selected !== '') {
+        // dim the rest: a veil of the background colour, then the selection again on top
+        ctx.globalAlpha = 0.75;
+        ctx.fillStyle = css.getPropertyValue('--diagram-bg').trim() || '#fff';
+        ctx.fillRect(-view.tx / view.scale, -view.ty / view.scale, el.clientWidth / view.scale, el.clientHeight / view.scale);
+        ctx.globalAlpha = 1;
+        for (const s of diagram.segments) if (inSel(s)) { ctx.fillStyle = segmentColor(s, settings.colorMode, dark); const r = segmentRect(s); ctx.fillRect(r.x, r.y, Math.max(r.w, minPx), Math.max(r.h, minPx)); }
+      }
+      const b = boundsOf(diagram.segments.filter(inSel));
+      if (b) {
+        ctx.strokeStyle = css.getPropertyValue('--accent').trim() || '#5b4bd6';
+        ctx.lineWidth = 1.5 / view.scale;
+        ctx.strokeRect(b.x, b.y, b.w, b.h);
+      }
+    }
+  }, [canvasData, diagram, view, selected, settings.colorMode, dark]);
 
   // The hovered subterm on its own transparent canvas: a hover change repaints only these rectangles.
   const hoverSegs = useMemo(() => {
@@ -228,22 +240,28 @@ export function DiagramView() {
     }
   }, [canvasData, view, hoverSegs]);
 
-  // Overlay highlights: hovered subtree and next redex.
-  const overlay = useMemo(() => {
-    if (!diagram || useCanvas) return [] as { s: Segment; cls: string }[];
+  // The next redex glows under the lines, so the lines keep their own colours on top.
+  const halo = useMemo(() => {
+    if (!diagram || useCanvas || redex === null) return [] as { s: Segment; cls: string }[];
     const out: { s: Segment; cls: string }[] = [];
-    if (redex !== null) {
-      const fnPath = redex + 'f', argPath = redex + 'a';
-      for (const s of diagram.segments) {
-        if (s.kind === 'app' && s.path === redex) out.push({ s, cls: 'hl-link' });
-        else if ((s.kind === 'lam' && s.path === fnPath) || (s.kind === 'var' && s.binder === fnPath)) out.push({ s, cls: 'hl-fn' });
-        else if (s.path.startsWith(argPath)) out.push({ s, cls: 'hl-arg' });
-      }
+    const fnPath = redex + 'f', argPath = redex + 'a';
+    for (const s of diagram.segments) {
+      if (s.kind === 'app' && s.path === redex) out.push({ s, cls: 'hl-link' });
+      else if ((s.kind === 'lam' && s.path === fnPath) || (s.kind === 'var' && s.binder === fnPath)) out.push({ s, cls: 'hl-fn' });
+      else if (s.path.startsWith(argPath)) out.push({ s, cls: 'hl-arg' });
     }
-    if (selected !== null) for (const s of diagram.segments) if (s.path.startsWith(selected)) out.push({ s, cls: 'hl-select' });
-    if (dropAt) for (const s of diagram.segments) if (s.path.startsWith(dropAt.path)) out.push({ s, cls: 'hl-drop' });
     return out;
-  }, [diagram, redex, useCanvas, selected, dropAt]);
+  }, [diagram, redex, useCanvas]);
+  // The selection: the rest of the diagram is dimmed and the selected part boxed.
+  const selection = useMemo(() => {
+    if (!diagram || useCanvas || selected === null) return null;
+    const segs = diagram.segments.filter((s) => s.path.startsWith(selected));
+    return { segs: selected === '' ? [] : segs, box: boundsOf(segs), dim: selected !== '' };
+  }, [diagram, useCanvas, selected]);
+  const overlay = useMemo(() => {
+    if (!diagram || useCanvas || !dropAt) return [] as { s: Segment; cls: string }[];
+    return diagram.segments.filter((s) => s.path.startsWith(dropAt.path)).map((s) => ({ s, cls: 'hl-drop' }));
+  }, [diagram, useCanvas, dropAt]);
 
   const segAt = (e: React.MouseEvent | React.DragEvent): Segment | null => {
     if (canvasData && wrap.current) {
@@ -396,8 +414,15 @@ export function DiagramView() {
         {diagram && !useCanvas && (
           <svg className="diagram-svg" width="100%" height="100%" style={animating ? { visibility: 'hidden' } : undefined}>
             <g transform={`translate(${view.tx} ${view.ty}) scale(${view.scale})`} shapeRendering="crispEdges">
-              <g dangerouslySetInnerHTML={{ __html: baseHtml }} />
+              <g className={selection?.dim ? 'dimmed' : undefined}>
+                <g className="halo" pointerEvents="none">
+                  {halo.map(({ s, cls }, k) => { const r = segmentRect(s); return <rect key={k} className={cls} x={r.x - HALO} y={r.y - HALO} width={r.w + 2 * HALO} height={r.h + 2 * HALO} rx={HALO} />; })}
+                </g>
+                <g dangerouslySetInnerHTML={{ __html: baseHtml }} />
+              </g>
               <g className="overlay" pointerEvents="none">
+                {selection?.segs.map((s, k) => { const r = segmentRect(s); return <rect key={'s' + k} x={r.x} y={r.y} width={r.w} height={r.h} fill={segmentColor(s, settings.colorMode, dark)} />; })}
+                {selection?.box && <rect className="hl-select" x={selection.box.x} y={selection.box.y} width={selection.box.w} height={selection.box.h} rx={0.4} vectorEffect="non-scaling-stroke" />}
                 {overlay.map(({ s, cls }, k) => { const r = segmentRect(s); return <rect key={k} className={cls} x={r.x} y={r.y} width={r.w} height={r.h} />; })}
                 {hoverSegs.map((s, k) => { const r = segmentRect(s); return <rect key={'h' + k} className="hl-hover" x={r.x} y={r.y} width={r.w} height={r.h} />; })}
               </g>
@@ -421,6 +446,18 @@ export function DiagramView() {
   );
 }
 
+/** How far the redex glow reaches past a line, in diagram units (lines are 1 unit wide, 1 apart). */
+const HALO = 0.45;
+
+/** The box around some segments, with a little room. */
+function boundsOf(segs: Segment[]): { x: number; y: number; w: number; h: number } | null {
+  if (!segs.length) return null;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const s of segs) { x0 = Math.min(x0, s.x1); y0 = Math.min(y0, s.y1); x1 = Math.max(x1, s.x2 + 1); y1 = Math.max(y1, s.y2 + 1); }
+  const pad = 0.6;
+  return { x: x0 - pad, y: y0 - pad, w: x1 - x0 + 2 * pad, h: y1 - y0 + 2 * pad };
+}
+
 function describeSeg(s: Segment): string {
   if (s.kind === 'lam') return 'λ abstraction';
   if (s.kind === 'app') return 'application';
@@ -437,7 +474,7 @@ function Legend({ mode, redex }: { mode: ColorMode; redex: boolean }) {
       {mode === 'binder' && <span>Each λ and the variables it binds share a colour; <span className="sw kind-app" /> applications are grey; <span className="sw kind-free" /> free variables are red.</span>}
       {mode === 'depth' && <span>Colour follows depth: the hue shifts with each enclosing λ.</span>}
       {mode === 'kind' && <span><span className="sw kind-lam" /> λ <span className="sw kind-app" /> application <span className="sw kind-var" /> bound variable <span className="sw kind-free" /> free variable</span>}
-      {redex && <span>Next redex: <span className="sw hl-fn" /> function λ and its variables <span className="sw hl-arg" /> argument <span className="sw hl-link" /> application</span>}
+      {redex && <span>The next redex glows: <span className="sw glow hl-fn" /> its function λ and variables <span className="sw glow hl-arg" /> argument <span className="sw glow hl-link" /> application link</span>}
       <span className="legend-how">{COARSE ? 'Double-tap a link to reduce · drag to pan · pinch to zoom' : 'Double-click a link to reduce · drag to pan · Ctrl+wheel to zoom'}</span>
     </div>
   );
