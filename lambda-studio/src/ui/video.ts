@@ -24,15 +24,25 @@ export interface VideoOptions {
   highlight: boolean;
 }
 
-type Frame = { kind: 'still'; d: Diagram; v: View; ms: number } | { kind: 'morph'; m: Morph; t: number; ms: number };
+/** A morph frame builds its step's morph on first use (shared by all frames of that step), so planning stays cheap. */
+type Frame = { kind: 'still'; d: Diagram; v: View; ms: number } | { kind: 'morph'; m: () => Morph; t: number; ms: number };
 
 export interface VideoPlan { W: number; H: number; frames: Frame[]; seconds: number }
 
 export const MAX_VIDEO_SEGMENTS = 6000;
 
 /** Lay out every term and work out the frame list. Throws if a diagram is too large. */
+/** Layouts are kept per term and style, so changing the size, speed, colours or range re-uses them. */
+const layouts = new WeakMap<Term, Map<DiagramStyle, Diagram | null>>();
+function layoutCached(t: Term, style: DiagramStyle): Diagram | null {
+  let m = layouts.get(t);
+  if (!m) { m = new Map(); layouts.set(t, m); }
+  if (!m.has(style)) m.set(style, layoutSafe(t, style));
+  return m.get(style)!;
+}
+
 export function planVideo(steps: VideoStep[], o: VideoOptions): VideoPlan {
-  const ds = steps.map((s) => layoutSafe(s.term, o.style));
+  const ds = steps.map((s) => layoutCached(s.term, o.style));
   if (ds.some((d) => !d)) throw new Error('Could not draw one of the terms.');
   const diagrams = ds as Diagram[];
   const big = diagrams.find((d) => d.segments.length > MAX_VIDEO_SEGMENTS);
@@ -50,10 +60,13 @@ export function planVideo(steps: VideoStep[], o: VideoOptions): VideoPlan {
   const frameMs = 1000 / o.fps;
   frames.push({ kind: 'still', d: diagrams[0], v: views[0], ms: o.hold * 1000 });
   for (let k = 1; k < steps.length; k++) {
-    const s = steps[k], prev = steps[k - 1];
-    let m: Morph | null = null;
-    if (s.kind === 'beta' && s.path !== undefined) m = stepMorph(prev.term, s.path, diagrams[k - 1], diagrams[k], views[k - 1], views[k], o.mode, o.dark);
-    if (!m) m = crossfade(diagrams[k - 1], diagrams[k], views[k - 1], views[k], o.mode, o.dark);
+    const s = steps[k], prev = steps[k - 1], j = k;
+    let built: Morph | null = null;
+    const m = () => {
+      if (built) return built;
+      if (s.kind === 'beta' && s.path !== undefined) built = stepMorph(prev.term, s.path, diagrams[j - 1], diagrams[j], views[j - 1], views[j], o.mode, o.dark);
+      return (built ??= crossfade(diagrams[j - 1], diagrams[j], views[j - 1], views[j], o.mode, o.dark));
+    };
     const n = Math.max(2, Math.round((o.secondsPerStep * 1000) / frameMs));
     for (let i = 1; i <= n; i++) frames.push({ kind: 'morph', m, t: i / n, ms: frameMs });
     frames.push({ kind: 'still', d: diagrams[k], v: views[k], ms: k === steps.length - 1 ? o.hold * 1000 : frameMs * 2 });
@@ -71,7 +84,7 @@ function crossfade(a: Diagram, b: Diagram, va: View, vb: View, mode: ColorMode, 
 }
 
 export function frameRects(f: Frame, o: VideoOptions): FrameRect[] {
-  return f.kind === 'still' ? stillFrame(f.d, f.v, o.mode, o.dark) : morphFrame(f.m, f.t, o.highlight ? highlightColors(o.dark) : null);
+  return f.kind === 'still' ? stillFrame(f.d, f.v, o.mode, o.dark) : morphFrame(f.m(), f.t, o.highlight ? highlightColors(o.dark) : null);
 }
 
 export interface Progress { (done: number, total: number): void }

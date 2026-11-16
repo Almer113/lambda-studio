@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pencil, Workflow, Wrench, Languages, Library as LibraryIcon, Eye } from 'lucide-react';
 import { Editor } from './Editor';
 import { DiagramView } from './DiagramView';
@@ -34,15 +34,31 @@ const SIDE_TABS: TabDef<SideTab>[] = [
   { id: 'tools', label: 'Tools', icon: Wrench, title: 'Expressions, truth and number tables, laws, data types, generators' },
 ];
 
-/** Notations and Tools share the right-hand column, as tabs. */
-function SidePanel() {
+/** True while the media query matches. */
+function useMedia(q: string): boolean {
+  const [on, setOn] = useState(() => typeof matchMedia === 'function' && matchMedia(q).matches);
+  useEffect(() => {
+    if (typeof matchMedia !== 'function') return;
+    const mq = matchMedia(q);
+    const f = () => setOn(mq.matches);
+    f();
+    mq.addEventListener('change', f);
+    return () => mq.removeEventListener('change', f);
+  }, [q]);
+  return on;
+}
+
+/** Notations and Tools share the right-hand column, as tabs. When the column is hidden (another
+ *  section is open on a phone) their content is not mounted, so tables and conversions don't keep
+ *  recomputing, and background jobs stop, for a term nobody is looking at. */
+function SidePanel({ active }: { active: boolean }) {
   const tab = useStore((s) => s.settings.sideTab);
   const setSetting = useStore((s) => s.setSetting);
   return (
     <div className="panel side-panel">
       <TabList tabs={SIDE_TABS} value={tab} onChange={(t) => setSetting('sideTab', t)} label="Notations and tools" idPrefix="side" className="side-tabs" />
       <TabPanel idPrefix="side" value={tab}>
-        {tab === 'tools' ? <Guard name="Tools"><ToolsPanel /></Guard> : <Guard name="Notations"><Conversions /></Guard>}
+        {!active ? null : tab === 'tools' ? <Guard name="Tools"><ToolsPanel /></Guard> : <Guard name="Notations"><Conversions /></Guard>}
       </TabPanel>
     </div>
   );
@@ -54,6 +70,8 @@ export function App() {
   const [tab, setTabState] = useState<MobileTab>('diagram');
   const preview = useStore((s) => s.settings.sourcePreview);
   const setSetting = useStore((s) => s.setSetting);
+  const phone = useMedia('(max-width: 860px)');
+  const sideActive = !phone || tab === 'tools' || tab === 'convert';
   const setTab = (t: MobileTab) => {
     setTabState(t);
     if (t === 'tools') setSetting('sideTab', 'tools');
@@ -83,7 +101,7 @@ export function App() {
         </section>
         <aside className="col-right">
           <Guard name="Inspector"><Inspector /></Guard>
-          <SidePanel />
+          <SidePanel active={sideActive} />
         </aside>
       </main>
       <Guard name="Export"><ExportDialog /></Guard>

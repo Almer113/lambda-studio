@@ -1,6 +1,6 @@
 // Tutorial drawer: short lessons that load terms, point at panels and check simple goals.
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { create } from 'zustand';
 import { useStore } from './store';
 import { LESSONS } from './lessons';
@@ -40,7 +40,25 @@ function Markup({ text }: { text: string }) {
   );
 }
 
-function point(selector: string) {
+/** On a phone, open the section tab that shows `selector` (tried in a likely order). */
+async function revealSection(selector: string) {
+  const frame = () => new Promise<void>((r) => setTimeout(r, 30)); // let React render the tab
+  const visible = () => (document.querySelector(selector) as HTMLElement | null)?.offsetParent != null;
+  const tabs = [...document.querySelectorAll<HTMLElement>('.tablist.tabs [role="tab"]')];
+  if (visible() || !tabs.length || tabs[0].offsetParent === null) return;
+  const el = document.querySelector(selector);
+  const side = useStore.getState().settings.sideTab === 'tools' ? 'tools' : 'convert';
+  const first = el?.closest('.col-left') ? 'library' : el?.closest('.col-right') || selector === '.col-right' ? side : el?.closest('.editor-panel') ? 'edit' : 'diagram';
+  const order = [first, ...tabs.map((t) => t.id.replace('mobile-tab-', '')).filter((id) => id !== first)];
+  for (const id of order) {
+    document.getElementById(`mobile-tab-${id}`)?.click();
+    await frame();
+    if (visible()) return;
+  }
+}
+
+async function point(selector: string) {
+  await revealSection(selector);
   const el = document.querySelector(selector);
   if (!el) return;
   el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'nearest' });
@@ -56,8 +74,32 @@ export function Tutorial() {
   return open ? <TutorialDrawer /> : null;
 }
 
+/** The visible Tutorial button in the header (the wide one, or the one in the ⋯ menu's trigger). */
+function tutorialButton(): HTMLElement | null {
+  const all = [...document.querySelectorAll<HTMLElement>('.header button[aria-label="Tutorial"], .header button[aria-label="More options"]')];
+  return all.find((b) => b.offsetParent !== null) ?? null;
+}
+
+/** Opened from a button, focus moves into the drawer; when it closes, focus goes back to where it was
+ *  (or to the Tutorial button) if it was inside the drawer, so keyboard users don't land on <body>. */
+function useFocusReturn(ref: RefObject<HTMLElement>) {
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
+    if (opener && !opener.closest('.tutorial')) ref.current?.querySelector<HTMLElement>('h2')?.focus({ preventScroll: true });
+    return () => {
+      const a = document.activeElement;
+      const lost = !a || a === document.body || !a.isConnected || !!ref.current?.contains(a);
+      if (!lost) return;
+      const back = opener?.isConnected && opener.offsetParent !== null ? opener : tutorialButton();
+      back?.focus({ preventScroll: true });
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
 function TutorialDrawer() {
   const t = useTutorial();
+  const root = useRef<HTMLElement>(null);
+  useFocusReturn(root);
   const st = useStore();
   const lesson = LESSONS[Math.min(t.lesson, LESSONS.length - 1)];
   const step = lesson.steps[Math.min(t.step, lesson.steps.length - 1)];
@@ -83,9 +125,10 @@ function TutorialDrawer() {
   const last = t.lesson === LESSONS.length - 1 && t.step === lesson.steps.length - 1;
 
   return (
-    <aside className="tutorial" aria-label="Tutorial">
+    <aside className="tutorial" aria-label="Tutorial" ref={root}
+      onKeyDown={(e) => { if (e.key === 'Escape' && !e.defaultPrevented && (e.target as HTMLElement).tagName !== 'SELECT') { e.stopPropagation(); t.set({ open: false }); } }}>
       <div className="tut-head">
-        <h2>Tutorial</h2>
+        <h2 tabIndex={-1}>Tutorial</h2>
         <select aria-label="Lesson" value={t.lesson} onChange={(e) => go(Number(e.target.value), 0)}>
           {LESSONS.map((l, i) => <option key={l.id} value={i}>{lessonDone(i) ? '✓ ' : ''}{l.title}</option>)}
         </select>

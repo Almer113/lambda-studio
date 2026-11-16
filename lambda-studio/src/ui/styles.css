@@ -110,6 +110,10 @@ kbd { border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 
 
 .tex { overflow-x: auto; overflow-y: hidden; padding: 2px 0; cursor: default; }
 .tex .katex { font-size: 1.12em; }
+/* long formulas wrap between atoms instead of scrolling sideways */
+.tex .katex, .tex .katex-html, .tex .katex .base { white-space: normal; }
+.tex .katex .base { display: inline; }
+.tex .katex-html { line-height: 1.7; }
 .tex [data-p] { border-radius: 3px; }
 .tex .tx-hover { background: var(--tx-hover); }
 .tex .tx-redex { background: var(--tx-redex); }

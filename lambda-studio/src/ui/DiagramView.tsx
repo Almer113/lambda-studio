@@ -24,6 +24,29 @@ export function useDiagram(term: Term | null, style: DiagramStyle): Diagram | nu
 }
 
 
+/** The segments lit up by hovering `path`: a λ with the variables it binds, a variable with its λ,
+ *  otherwise the whole subterm. Cached per diagram, so moving back and forth costs nothing. */
+const hoverCache = new WeakMap<Diagram, Map<string, Segment[]>>();
+function hoverSet(d: Diagram, path: string, source: string | null): Segment[] {
+  const key = (source === 'diagram' ? 'd:' : 't:') + path;
+  let m = hoverCache.get(d);
+  if (!m) { m = new Map(); hoverCache.set(d, m); }
+  const hit = m.get(key);
+  if (hit) return hit;
+  const seg = source === 'diagram' ? d.segments.find((s) => s.path === path) : undefined;
+  const out: Segment[] = [];
+  for (const s of d.segments) {
+    let on: boolean;
+    if (seg?.kind === 'lam') on = s.path === path || s.binder === path;
+    else if (seg?.kind === 'var') on = s.path === path || (s.kind === 'lam' && s.path === seg.binder);
+    else on = s.path.startsWith(path);
+    if (on) out.push(s);
+  }
+  if (m.size > 256) m.clear();
+  m.set(key, out);
+  return out;
+}
+
 export function DiagramView() {
   const term = useStore(currentTerm);
   const settings = useStore((s) => s.settings);
@@ -44,6 +67,7 @@ export function DiagramView() {
   const shown = useRef<{ index: number; term: Term | null; diagram: Diagram | null; view: View } | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const hoverCanvasRef = useRef<HTMLCanvasElement>(null);
   const [view, setView] = useState<View>({ scale: 1, tx: 0, ty: 0 });
   const [autoFit, setAutoFit] = useState(true);
   const drag = useRef<{ x: number; y: number; tx: number; ty: number; moved: boolean } | null>(null);
@@ -164,8 +188,34 @@ export function DiagramView() {
     };
     const css = getComputedStyle(el);
     if (selected !== null) mark((s) => s.path.startsWith(selected), css.getPropertyValue('--accent').trim() || '#5b4bd6');
-    if (hover !== null) mark((s) => s.path.startsWith(hover), css.getPropertyValue('--hl-hover').trim() || 'orange');
-  }, [canvasData, diagram, view, selected, hover]);
+  }, [canvasData, diagram, view, selected]);
+
+  // The hovered subterm on its own transparent canvas: a hover change repaints only these rectangles.
+  const hoverSegs = useMemo(() => {
+    if (!diagram || hover === null) return [] as Segment[];
+    return hoverSet(diagram, hover, hoverSource);
+  }, [diagram, hover, hoverSource]);
+  useEffect(() => {
+    const c = hoverCanvasRef.current, el = wrap.current;
+    if (!canvasData || !c || !el) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = el.clientWidth * dpr, h = el.clientHeight * dpr;
+    if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+    const ctx = c.getContext('2d')!;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, c.width, c.height);
+    if (!hoverSegs.length) return;
+    ctx.setTransform(dpr * view.scale, 0, 0, dpr * view.scale, dpr * view.tx, dpr * view.ty);
+    const minPx = 1 / (view.scale * dpr);
+    ctx.fillStyle = getComputedStyle(el).getPropertyValue('--hl-hover').trim() || 'orange';
+    // only what is on screen (diagram coordinates of the visible area)
+    const x0 = -view.tx / view.scale, y0 = -view.ty / view.scale, x1 = x0 + el.clientWidth / view.scale, y1 = y0 + el.clientHeight / view.scale;
+    for (const s of hoverSegs) {
+      const r = segmentRect(s);
+      if (r.x > x1 || r.y > y1 || r.x + r.w < x0 || r.y + r.h < y0) continue;
+      ctx.fillRect(r.x, r.y, Math.max(r.w, minPx), Math.max(r.h, minPx));
+    }
+  }, [canvasData, view, hoverSegs]);
 
   // Overlay highlights: hovered subtree and next redex.
   const overlay = useMemo(() => {
@@ -181,18 +231,8 @@ export function DiagramView() {
     }
     if (selected !== null) for (const s of diagram.segments) if (s.path.startsWith(selected)) out.push({ s, cls: 'hl-select' });
     if (dropAt) for (const s of diagram.segments) if (s.path.startsWith(dropAt.path)) out.push({ s, cls: 'hl-drop' });
-    if (hover !== null) {
-      const hoveredSeg = hoverSource === 'diagram' ? diagram.segments.find((s) => s.path === hover) : undefined;
-      for (const s of diagram.segments) {
-        let on: boolean;
-        if (hoveredSeg?.kind === 'lam') on = s.path === hover || s.binder === hover; // λ and the variables it binds
-        else if (hoveredSeg?.kind === 'var') on = s.path === hover || (s.kind === 'lam' && s.path === hoveredSeg.binder); // variable and its λ
-        else on = s.path.startsWith(hover); // application / text hover: the whole subterm
-        if (on) out.push({ s, cls: 'hl-hover' });
-      }
-    }
     return out;
-  }, [diagram, redex, hover, hoverSource, useCanvas, selected, dropAt]);
+  }, [diagram, redex, useCanvas, selected, dropAt]);
 
   const segAt = (e: React.MouseEvent | React.DragEvent): Segment | null => {
     if (canvasData && wrap.current) {
@@ -347,11 +387,13 @@ export function DiagramView() {
               <g dangerouslySetInnerHTML={{ __html: baseHtml }} />
               <g className="overlay" pointerEvents="none">
                 {overlay.map(({ s, cls }, k) => { const r = segmentRect(s); return <rect key={k} className={cls} x={r.x} y={r.y} width={r.w} height={r.h} />; })}
+                {hoverSegs.map((s, k) => { const r = segmentRect(s); return <rect key={'h' + k} className="hl-hover" x={r.x} y={r.y} width={r.w} height={r.h} />; })}
               </g>
             </g>
           </svg>
         )}
         {diagram && useCanvas && <canvas ref={canvasRef} className="diagram-canvas" />}
+        {diagram && useCanvas && <canvas ref={hoverCanvasRef} className="diagram-canvas" style={{ pointerEvents: 'none' }} />}
         <canvas ref={animRef} className="diagram-canvas" style={{ pointerEvents: 'none', visibility: animating ? 'visible' : 'hidden' }} />
         {diagram && (
           <div className="diagram-info">
