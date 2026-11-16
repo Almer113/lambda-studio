@@ -8,9 +8,9 @@ New to the λ-calculus? The **Tutorial** (the graduation-cap button in the heade
 |---|---|
 | **Library** (left) | Built-in definitions grouped by topic. Click a name to insert it, or drag it onto a line of the diagram. Your own definitions are listed at the top. |
 | **Encode data** (left) | Turns a number, Boolean, list, string, pair, Maybe or Either into a λ-term (Church, Scott, Parigot or binary). |
-| **Source** (centre) | The editor. Type `\` for λ. The eye button shows a typeset preview underneath. |
+| **Source** (centre) | The editor. Type `\` for λ. The eye button shows a typeset preview underneath (off by default). |
 | **Controls** | Step, back, play, run, fast normalizer, and a timeline of the steps taken. The bar stays at the top of the centre column while you scroll. |
-| **Current term** | The term at the current step, as text or typeset. Click a part to select it for editing. The tag button turns names and numerals on and off. |
+| **Current term** | The term at the current step, as text or typeset. Click a part to select it for editing. The tag button turns names and numerals on and off. If the last line has a syntax error, the last definition is shown instead, with a note saying so. |
 | **Tromp diagram** | The term as a diagram. Hover, click, double-click, zoom and pan. The legend under it explains the colours. |
 | **Inspector** (right) | Status, decoded value, size, BLC bits, closedness and the simple type. |
 | **Notations · Tools** (right, tabs) | Notations: the current term in every notation, each with copy buttons and, where useful, a TeX view. Tools: Expression → λ, truth tables, number tables, laws, data types, generators. |
@@ -93,6 +93,6 @@ Dragging a library name onto a diagram line replaces that subterm with the defin
 - **Text & code:** reduction traces (named, de Bruijn, LaTeX `align*`), a Markdown summary, Tromp's `.lam`, `.blc` bits and `.blc8` bytes.
 - **Workspace:** save the source, input format and settings as JSON, and open it again later.
 
-**Settings** (the gear) holds the display options (names, numerals, how λt f.f is shown, theme), the editor options and the limits for Run. Settings are kept in this browser; **Reset all settings** restores the defaults.
+**Settings** (the gear) holds the display options (numerals, how λt f.f is shown), the editor options and the limits for Run. Showing known parts by name is the tag button on **Current term**, the typeset preview is the eye button on **Source**, and the theme is the button at the right of the header. Settings are kept in this browser; **Reset all settings** restores the defaults.
 
 **File › Copy share link** copies a URL with the source compressed into it (where the browser does not allow copying, the link is shown instead). Nothing is sent to a server: the whole app runs in your browser. Opening a share link replaces your source; the status bar then offers to restore the previous one, and the link is removed from the address bar so a later reload keeps your newer work.

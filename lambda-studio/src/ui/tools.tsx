@@ -438,7 +438,7 @@ function DataTool() {
         <>
           <pre className="tool-pre">{out.g.source}</pre>
           <div className="tool-row">
-            {out.demo && <button className="primary" onClick={() => actions.use(`${out.g.source}\n${out.demo}`)} title="Replace the source with these definitions and evaluate the example's size">Use as source (with {out.demo})</button>}
+            {out.demo && <button className="primary" onClick={() => actions.use(`${out.g.source}\n${out.demo}`)} title={`Replace the source with these definitions, followed by ${out.demo}`}>Use as source</button>}
             <IconButton icon={ListPlus} text="Append to source" label="Append these definitions to the source" onClick={() => actions.append(out.g.source)} />
             <CopyButton text={out.g.source} what="the definitions" />
           </div>
@@ -476,7 +476,7 @@ function GenerateTool() {
   };
   return (
     <div className="tool">
-      <p className="muted">Closed terms measured in binary λ-calculus bits (λ = 2, application = 2, variable i = i + 1 bits for 1-based i). The counts are OEIS A114852.</p>
+      <p className="muted">Closed terms measured in binary λ-calculus bits (λ = 2, application = 2, variable i = i + 1 bits for 1-based i). The counts are sequence A114852 in the OEIS (the On-Line Encyclopedia of Integer Sequences).</p>
       <div className="tool-row">
         <label>Size <NumberField min={4} max={2000} value={n} onChange={setN} /> bits</label>
         <span><b>{count.toLocaleString('en')}</b> closed term{count === 1n ? '' : 's'}</span>
@@ -492,6 +492,7 @@ function GenerateTool() {
       </div>
       {rand && <Code text={show(rand)} />}
       <h3>Enumerate and BBλ</h3>
+      <p className="muted">BBλ(n), the busy beaver function for λ-calculus, is the largest normal form (in bits) that any closed term of n bits reduces to. It grows faster than any computable function, so only small sizes can be settled.</p>
       <div className="tool-row">
         <label title="β-steps allowed before a term counts as undecided">Step budget <select value={fuel} onChange={(e) => setFuel(Number(e.target.value))}>{[1000, 10_000, 100_000].map((f) => <option key={f} value={f}>{f.toLocaleString('en')}</option>)}</select></label>
         <label className="check"><input type="checkbox" checked={onlyNormal} onChange={(e) => setOnlyNormal(e.target.checked)} /> only terms with a normal form</label>

@@ -79,7 +79,8 @@ export function tokensToTex(toks: Token[], spans: { path: Path; from: number; to
     // spacing
     if (prev) {
       if (inParams && prev.kind === 'id' && tok.kind === 'id') out += '\\,';
-      else if (atomEnd(prev) && atomStart(tok)) out += '\\:';
+      // ⌜2⌝ ⌜3⌝ needs a wider gap than f x: the corners otherwise read as one token
+      else if (atomEnd(prev) && atomStart(tok)) out += opts.numerals === 'church' && (prev.kind === 'num' || tok.kind === 'num') ? '\\;' : '\\:';
     }
     while (si < sorted.length && sorted[si].from <= tok.from) {
       const s = sorted[si++];

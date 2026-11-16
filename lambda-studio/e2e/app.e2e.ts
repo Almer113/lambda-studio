@@ -174,3 +174,13 @@ test('tablets get two columns, without the phone section tabs', async ({ page })
   expect(r!.x).toBeGreaterThan(c!.x + c!.width - 1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
+
+test('an error falls back to the last definition and says so; an empty source offers examples', async ({ page }) => {
+  await open(page);
+  await setSource(page, 'TWICE = λf x.f (f x)\nTWICE SUCC (');
+  await expect(page.locator('.fallback-notice')).toContainText('Showing TWICE, the last definition: line 2 has an error.');
+  await page.evaluate(() => (window as any).__store.getState().setSource(''));
+  await expect(page.locator('.fallback-notice')).toHaveCount(0);
+  await page.locator('.starters .chip', { hasText: '2 + 3' }).click();
+  await page.waitForFunction(() => (window as any).__store.getState().source === 'PLUS 2 3');
+});

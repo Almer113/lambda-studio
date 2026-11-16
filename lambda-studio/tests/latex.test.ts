@@ -35,7 +35,7 @@ describe('LaTeX output', () => {
     const prog = parseProgram('PLUS 2', 'auto');
     const fold = makeFolder(prog.foldTable, { numerals: true, zeroAs: '0' });
     const tex = printLatex(prog.term!, { fold, avoid: prog.foldTable.names });
-    expect(tex).toBe('\\mathsf{PLUS}\\:\\ulcorner 2\\urcorner ');
+    expect(tex).toBe('\\mathsf{PLUS}\\;\\ulcorner 2\\urcorner ');
   });
   it('tags every node for hover linking', () => {
     const tex = printLatex(P('λf x.f (f x)'), { tags: true });

@@ -16,7 +16,7 @@ import { printLatex } from '../core/formats/latex';
 import { TexView, ViewToggle } from './Tex';
 import { EditBar } from './EditBar';
 import { startDefDrag } from './dnd';
-import { NoTerm } from './NoTerm';
+import { NoTerm, FallbackNotice } from './NoTerm';
 import { SkipBack, StepBack, StepForward, Play, Pause, FastForward, Zap, Square, ChevronDown, ChevronRight, Tag } from 'lucide-react';
 import { IconButton } from './IconButton';
 
@@ -82,7 +82,8 @@ export function CurrentTerm() {
           <ViewToggle tex={asTex} onChange={setAsTex} />
         </span>
       </div>
-      {!term && <NoTerm />}
+      <FallbackNotice />
+      {!term && <NoTerm starters />}
       {term && printed && tex !== null && (
         <TexView tex={tex} className="term-tex" hover={hover} redex={redex} onHover={(p) => setHover(p, 'text')} onDoubleClick={reduceInnermost} selected={selected} onSelect={select} />
       )}

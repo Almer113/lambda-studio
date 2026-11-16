@@ -81,7 +81,8 @@ export function DiagramView() {
   const fit = useCallback(() => {
     const el = wrap.current;
     if (!el || !diagram) return;
-    setView(fitView(diagram, el.clientWidth, el.clientHeight));
+    // on a phone a wide diagram sits at the top of its box, not in the middle of blank space
+    setView(fitView(diagram, el.clientWidth, el.clientHeight, 4, 16, innerWidth < 640 ? 'top' : 'center'));
   }, [diagram]);
 
   /** Zoom the buttons apply: about the centre of the view (not the top-left corner). */

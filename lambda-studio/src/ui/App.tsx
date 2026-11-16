@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pencil, Workflow, Wrench, Languages, Library as LibraryIcon, Eye } from 'lucide-react';
 import { Editor } from './Editor';
 import { DiagramView } from './DiagramView';
@@ -6,6 +6,7 @@ import { Library, CurrentTerm, Controls, Inspector } from './panels';
 import { Header } from './Header';
 import { Conversions, DataPanel } from './convert';
 import { useApplyTheme } from './theme';
+import { useMedia } from './useMedia';
 import { SourcePreview } from './SourcePreview';
 import { useStore, type SideTab } from './store';
 import { ExportDialog } from './ExportDialog';
@@ -34,19 +35,6 @@ const SIDE_TABS: TabDef<SideTab>[] = [
   { id: 'tools', label: 'Tools', icon: Wrench, title: 'Expressions, truth and number tables, laws, data types, generators' },
 ];
 
-/** True while the media query matches. */
-function useMedia(q: string): boolean {
-  const [on, setOn] = useState(() => typeof matchMedia === 'function' && matchMedia(q).matches);
-  useEffect(() => {
-    if (typeof matchMedia !== 'function') return;
-    const mq = matchMedia(q);
-    const f = () => setOn(mq.matches);
-    f();
-    mq.addEventListener('change', f);
-    return () => mq.removeEventListener('change', f);
-  }, [q]);
-  return on;
-}
 
 /** Notations and Tools share the right-hand column, as tabs. When the column is hidden (another
  *  section is open on a phone) their content is not mounted, so tables and conversions don't keep

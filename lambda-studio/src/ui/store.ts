@@ -58,7 +58,7 @@ export const DEFAULT_SETTINGS: Settings = {
   colorMode: 'binder', diagramStyle: 'standard', animate: true, showRedex: true, autoLambda: true, theme: 'system',
   maxSteps: 10000, maxSize: 200000, playSpeed: 4,
   tex: { current: true, named: true, expanded: true, debruijn0: true, debruijn1: true },
-  sourcePreview: true,
+  sourcePreview: false,
   clAlgorithm: 'turner',
   // combinators and code are costly for big terms: closed until asked for
   openGroups: { lambda: true, combinators: false, code: false, bits: true },

@@ -17,6 +17,7 @@ import { Popover, MenuItem, MenuGroup } from './Popover';
 import { NumberField } from './NumberField';
 import { pickWorkspace, saveWorkspace } from './workspace';
 import { useToast } from './Toast';
+import { useMedia } from './useMedia';
 
 /**
  * Copy a share link. The page URL is left alone (a link written into the address bar would bring
@@ -84,10 +85,11 @@ function InputSelect() {
   const format = useStore((s) => s.format);
   const detected = useStore((s) => s.program.format);
   const setFormat = useStore((s) => s.setFormat);
+  const phone = useMedia('(max-width: 639px)');
   return (
     <label className="field">Input
       <select value={format} onChange={(e) => setFormat(e.target.value as FormatId | 'auto')}>
-        <option value="auto">Auto-detect{format === 'auto' ? ` (${FORMATS.find((f) => f.id === detected)?.name})` : ''}</option>
+        <option value="auto">{phone ? 'Auto' : 'Auto-detect'}{format === 'auto' ? ` (${FORMATS.find((f) => f.id === detected)?.name})` : ''}</option>
         {(['λ', 'Combinators', 'Code', 'Bits & data'] as const).map((g) => (
           <optgroup key={g} label={g}>
             {FORMATS.filter((f) => f.group === g).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
@@ -139,23 +141,16 @@ function SettingsPanel({ close }: { close(): void }) {
       <h3>Settings</h3>
       <fieldset>
         <legend>Display</legend>
-        <label className="check"><input type="checkbox" checked={s.foldNames} onChange={(e) => setSetting('foldNames', e.target.checked)} /> Show known parts by name</label>
         <label className="check"><input type="checkbox" checked={s.numerals} onChange={(e) => setSetting('numerals', e.target.checked)} /> Show Church numerals as digits</label>
         <label className="field">λt f.f is shown as
           <select value={s.zeroAs} onChange={(e) => setSetting('zeroAs', e.target.value as '0' | 'FALSE')}>
             <option value="0">0</option><option value="FALSE">FALSE</option>
           </select>
         </label>
-        <div className="field">Theme
-          <span className="seg" role="radiogroup" aria-label="Theme">
-            {THEMES.map((t) => <button key={t.id} type="button" role="radio" aria-checked={s.theme === t.id} className={s.theme === t.id ? 'on' : ''} onClick={() => setSetting('theme', t.id)}><t.icon size={14} aria-hidden /> {t.id[0].toUpperCase() + t.id.slice(1)}</button>)}
-          </span>
-        </div>
       </fieldset>
       <fieldset>
         <legend>Editor</legend>
         <label className="check"><input type="checkbox" checked={s.autoLambda} onChange={(e) => setSetting('autoLambda', e.target.checked)} /> Type \ to get λ</label>
-        <label className="check"><input type="checkbox" checked={s.sourcePreview} onChange={(e) => setSetting('sourcePreview', e.target.checked)} /> Typeset preview of the source</label>
       </fieldset>
       <fieldset>
         <legend>Limits for Run</legend>

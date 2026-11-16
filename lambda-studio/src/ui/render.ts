@@ -9,11 +9,12 @@ import { type Rect, type FrameRect, buildMorph, morphFrame, type Morph } from '.
 export interface View { scale: number; tx: number; ty: number }
 
 /** View that fits a diagram into a W×H box, centred (whole-pixel scale when ≥ 2). */
-export function fitView(d: Diagram, W: number, H: number, pad = 4, maxScale = 16): View {
+export function fitView(d: Diagram, W: number, H: number, pad = 4, maxScale = 16, align: 'center' | 'top' = 'center'): View {
   const dw = d.width + pad, dh = d.height - d.top + pad;
   let scale = Math.max(0.02, Math.min(maxScale, Math.min(W / dw, H / dh)));
   if (scale >= 2) scale = Math.floor(scale);
-  return { scale, tx: (W - d.width * scale) / 2, ty: (H - (d.height + d.top) * scale) / 2 };
+  const ty = align === 'top' ? Math.min((H - (d.height + d.top) * scale) / 2, (pad / 2 - d.top) * scale + 12) : (H - (d.height + d.top) * scale) / 2;
+  return { scale, tx: (W - d.width * scale) / 2, ty };
 }
 
 export const placeIn = (v: View) => (r: Rect): Rect => ({ x: r.x * v.scale + v.tx, y: r.y * v.scale + v.ty, w: r.w * v.scale, h: r.h * v.scale });
