@@ -8,6 +8,7 @@
 import { type Term, type Path, app, lam, v, free } from '../term';
 import { shift, occurs } from '../debruijn';
 import { churchNumeral, churchList } from '../encodings';
+import { NameScope, collectFreeNames } from './names';
 
 export interface Span { from: number; to: number }
 export interface Diagnostic extends Span { message: string; severity: 'error' | 'warning' | 'info' }
@@ -352,17 +353,13 @@ export function printNamed(t: Term, opts: PrintOptions = {}): Printed {
   const multi = opts.multiArg ?? true;
   const fold = opts.fold;
   const avoid = new Set<string>(opts.avoid ?? []);
-  collectFreeNames(t, avoid);
+  collectFreeNames(t, avoid, (k) => `_${k}`);
   let out = '';
   const spans: Printed['spans'] = [];
-  const ctx: string[] = [];
+  const ctx = new NameScope((n) => avoid.has(n) || /^[0-9]/.test(n) || n === 'let' || n === 'in');
 
-  const pick = (hint: string | undefined): string => {
-    const base = hint && /^[\p{L}_][\p{L}\p{N}_'₀-₉]*$/u.test(hint) && hint !== 'λ' ? hint : DEFAULT_NAMES[ctx.length % DEFAULT_NAMES.length];
-    const taken = (n: string) => avoid.has(n) || ctx.includes(n) || /^[0-9]/.test(n) || n === 'let' || n === 'in';
-    if (!taken(base)) return base;
-    for (let k = 1; ; k++) if (!taken(base + k)) return base + k;
-  };
+  const pick = (hint: string | undefined): string =>
+    ctx.fresh(hint && /^[\p{L}_][\p{L}\p{N}_'₀-₉]*$/u.test(hint) && hint !== 'λ' ? hint : DEFAULT_NAMES[ctx.depth % DEFAULT_NAMES.length]);
 
   // Iterative printing (an explicit task stack): terms can be far deeper than the call stack.
   // Tasks are pushed in reverse order of execution.
@@ -377,7 +374,7 @@ export function printNamed(t: Term, opts: PrintOptions = {}): Printed {
       out += folded;
       finish();
     } else if (n.tag === 'var') {
-      out += n.i < ctx.length ? ctx[ctx.length - 1 - n.i] : `_${n.i - ctx.length}`;
+      out += n.i < ctx.depth ? ctx.at(n.i) : `_${n.i - ctx.depth}`;
       finish();
     } else if (n.tag === 'free') {
       out += n.name;
@@ -420,14 +417,4 @@ export function printNamed(t: Term, opts: PrintOptions = {}): Printed {
   emit(t, '', 'top');
   while (tasks.length) tasks.pop()!();
   return { text: out, spans };
-}
-
-function collectFreeNames(t: Term, into: Set<string>) {
-  const stack: Term[] = [t];
-  while (stack.length) {
-    const n = stack.pop()!;
-    if (n.tag === 'free') into.add(n.name);
-    else if (n.tag === 'lam') stack.push(n.body);
-    else if (n.tag === 'app') stack.push(n.fn, n.arg);
-  }
 }

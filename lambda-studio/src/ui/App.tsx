@@ -11,6 +11,7 @@ import { ToolsPanel } from './tools';
 import { Tutorial } from './Tutorial';
 import { Help, useShortcuts } from './Help';
 import { Guard } from './Boundary';
+import { SourceStatus } from './NoTerm';
 
 type Tab = 'edit' | 'diagram' | 'tools' | 'convert' | 'library';
 
@@ -35,7 +36,7 @@ export function App() {
             <div className="panel-head">
               <h2>Source</h2>
               <span className="head-tools">
-                <span className="sub">Type <kbd>\</kbd> for λ · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs</span>
+                <SourceStatus />
                 <label className="check" title="Typeset preview of the source"><input type="checkbox" checked={preview} onChange={(e) => setSetting('sourcePreview', e.target.checked)} /> Preview</label>
               </span>
             </div>

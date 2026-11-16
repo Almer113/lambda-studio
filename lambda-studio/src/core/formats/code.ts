@@ -7,6 +7,7 @@
 
 import { type Term } from '../term';
 import { type Normalized } from './latex';
+import { NameScope, collectFreeNames } from './names';
 
 export type CodeLang = 'haskell' | 'js' | 'python' | 'lisp' | 'wolfram';
 
@@ -41,15 +42,14 @@ const DEFAULT_NAMES = ['x', 'y', 'z', 'w', 'v', 'u', 't', 's', 'r', 'q'];
 
 export function printCode(t: Term, lang: CodeLang): string {
   const reserved = RESERVED[lang], valid = VALID[lang];
-  const ctx: string[] = [];
-  const freeName = (n: string) => (valid.test(n) && !reserved.has(n) ? n : 'free_' + n.replace(/[^A-Za-z0-9]/g, '') || 'free');
-  const pick = (hint?: string) => {
-    const base = hint && valid.test(hint) && !reserved.has(hint) ? hint : DEFAULT_NAMES[ctx.length % DEFAULT_NAMES.length];
-    const taken = (n: string) => ctx.includes(n) || reserved.has(n);
-    if (!taken(base)) return base;
-    for (let k = 1; ; k++) if (!taken(base + k)) return base + k;
-  };
-  const varName = (i: number) => (i < ctx.length ? ctx[ctx.length - 1 - i] : lang === 'wolfram' ? `free${i - ctx.length}` : `_${i - ctx.length}`);
+  const freeName = (n: string) => (valid.test(n) && !reserved.has(n) ? n : 'free_' + n.replace(/[^A-Za-z0-9]/g, ''));
+  const dangling = (k: number) => (lang === 'wolfram' ? `free${k}` : `_${k}`);
+  // bound names avoid reserved words and every name a free variable is printed with
+  const freeNames = new Set<string>();
+  collectFreeNames(t, freeNames, dangling, freeName);
+  const ctx = new NameScope((n) => reserved.has(n) || freeNames.has(n));
+  const pick = (hint?: string) => ctx.fresh(hint && valid.test(hint) && !reserved.has(hint) ? hint : DEFAULT_NAMES[ctx.depth % DEFAULT_NAMES.length]);
+  const varName = (i: number) => (i < ctx.depth ? ctx.at(i)! : dangling(i - ctx.depth));
 
   // collect a run of lambdas
   const params = (n: Term): { names: string[]; body: Term } => {
@@ -75,7 +75,7 @@ export function printCode(t: Term, lang: CodeLang): string {
     if (n.tag === 'lam') {
       const { names, body } = params(n);
       const paren = pos !== 'top';
-      const pop = () => tasks.push(() => { ctx.length -= names.length; });
+      const pop = () => tasks.push(() => { for (let k = 0; k < names.length; k++) ctx.pop(); });
       switch (lang) {
         case 'haskell': seq(() => text(`${paren ? '(' : ''}\\${names.join(' ')} -> `), () => go(body, 'top'), pop, () => text(paren ? ')' : '')); break;
         case 'js': seq(() => text(`${paren ? '(' : ''}${names.join(' => ')} => `), () => go(body, 'top'), pop, () => text(paren ? ')' : '')); break;

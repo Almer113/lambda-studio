@@ -10,6 +10,7 @@ import { useExport } from './ExportDialog';
 import { DEF_MIME, preludeOrUserTerm } from './dnd';
 import { findRedex } from '../core/reduce';
 import { useIsDark } from './theme';
+import { NoTerm } from './NoTerm';
 
 const SVG_LIMIT = 6000; // segments; above this the diagram is drawn on a canvas
 const DRAW_LIMIT = 1_500_000; // term nodes; above this we do not lay the diagram out
@@ -45,6 +46,8 @@ export function DiagramView() {
   const [view, setView] = useState<View>({ scale: 1, tx: 0, ty: 0 });
   const [autoFit, setAutoFit] = useState(true);
   const drag = useRef<{ x: number; y: number; tx: number; ty: number; moved: boolean } | null>(null);
+  /** The segment under the first click of a possible double-click (the page may move in between). */
+  const firstClick = useRef<{ seg: Segment | null; at: number } | null>(null);
 
   const redex = useMemo(() => (term && settings.showRedex ? findRedex(term, settings) : null), [term, settings]);
   const useCanvas = !!diagram && diagram.segments.length > SVG_LIMIT;
@@ -286,6 +289,7 @@ export function DiagramView() {
         onClick={(e) => {
           if (drag.current?.moved || e.detail > 1) return;
           const s = segAt(e);
+          firstClick.current = { seg: s, at: e.timeStamp };
           select(s ? (s.path === selected ? null : s.path) : null);
         }}
         onDragOver={(e) => {
@@ -308,7 +312,10 @@ export function DiagramView() {
         }}
         onMouseLeave={() => { drag.current = null; setHover(null); }}
         onDoubleClick={(e) => {
-          const s = segAt(e);
+          // use what the first click hit: selecting it can change the layout around the diagram
+          const first = firstClick.current;
+          firstClick.current = null;
+          const s = first && e.timeStamp - first.at < 1000 ? first.seg : segAt(e);
           if (!s) return;
           // double-click an application link (or anything inside a redex's function) to reduce it
           let p: Path | null = s.kind === 'app' ? s.path : s.kind === 'lam' && s.path.endsWith('f') ? s.path.slice(0, -1) : null;
@@ -316,7 +323,9 @@ export function DiagramView() {
           if (p !== null) reduceAt(p);
         }}
       >
-        {!diagram && <div className="empty">{term && size(term) > DRAW_LIMIT ? `Too large to draw (${size(term).toLocaleString('en')} nodes). The Inspector still has its statistics.` : 'No term to draw.'}</div>}
+        {!diagram && (term
+          ? <div className="empty">{size(term) > DRAW_LIMIT ? `Too large to draw (${size(term).toLocaleString('en')} nodes). The Inspector still has its statistics.` : 'This term could not be drawn.'}</div>
+          : <NoTerm text="No term to draw." />)}
         {diagram && !useCanvas && (
           <svg className="diagram-svg" width="100%" height="100%" style={animating ? { visibility: 'hidden' } : undefined}>
             <g transform={`translate(${view.tx} ${view.ty}) scale(${view.scale})`} shapeRendering="crispEdges">

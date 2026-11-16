@@ -1,6 +1,6 @@
 // Notations panel (all conversions of the current term, grouped) and the data encoder.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useStore, currentTerm } from './store';
 import { printNamed } from '../core/formats/named';
 import { printDeBruijn } from '../core/formats/debruijn';
@@ -17,6 +17,7 @@ import { encodeData, DATA_KINDS, ENCODING_NAMES, type DataKind, type Encoding } 
 import { TexView, ViewToggle } from './Tex';
 import { reduceInnermost } from './TermText';
 import { useFolder } from './panels';
+import { NoTerm } from './NoTerm';
 
 const BIG = 25000;
 /** Longest text shown in a row (copy still gives everything). */
@@ -133,7 +134,7 @@ export function Conversions() {
   return (
     <div className="panel conversions">
       <div className="panel-head"><h2>Notations</h2></div>
-      {!term && <div className="empty">—</div>}
+      {!term && <NoTerm text="—" brief />}
       {tooBig && <button onClick={() => setForce(true)}>Term is large ({size(term!)} nodes) — compute notations</button>}
       {term && !tooBig && GROUPS.map((g) => (
         <section key={g.id} className="conv-group">
@@ -205,12 +206,14 @@ export function DataPanel() {
   const setSource = useStore((s) => s.setSource);
   const info = DATA_KINDS.find((k) => k.id === kind)!;
   const encoding = info.encodings.includes(enc) ? enc : info.encodings[0];
+  // large values make large terms: keep typing responsive while the result catches up
+  const typed = useDeferredValue(value);
   const result = useMemo(() => {
     try {
-      const t = encodeData(kind, encoding, value);
+      const t = encodeData(kind, encoding, typed);
       return { text: printNamed(t).text, size: size(t) };
     } catch (e) { return { error: (e as Error).message }; }
-  }, [kind, encoding, value]);
+  }, [kind, encoding, typed]);
   return (
     <div className="panel data-panel">
       <div className="panel-head"><h2>Encode data</h2></div>

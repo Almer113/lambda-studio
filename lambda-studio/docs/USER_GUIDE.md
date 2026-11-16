@@ -55,7 +55,7 @@ Each λ is a horizontal bar, each variable a vertical line from its binder's bar
 
 ## Building terms (the creator)
 
-Select a subterm by clicking it in the diagram or the current term (or press an arrow key with the diagram focused, then use ↑ ↓ ← → to move). The edit bar offers:
+Select a subterm by clicking it in the diagram or the current term (or press an arrow key with the diagram focused, then use ↑ ↓ ← → to move). With the diagram focused, Enter β-reduces the selection and Delete removes it. The edit bar appears at the bottom of the window and offers:
 
 | Action | Effect |
 |---|---|
@@ -87,4 +87,4 @@ Dragging a library name onto a diagram line replaces that subterm with the defin
 - **Text & code:** reduction traces (named, de Bruijn, LaTeX `align*`), a Markdown summary, Tromp's `.lam`, `.blc` bits and `.blc8` bytes.
 - **Workspace:** save the source, input format and settings as JSON, and open it again later.
 
-**Share link** copies a URL with the source compressed into it. Nothing is sent to a server: the whole app runs in your browser.
+**Share link** copies a URL with the source compressed into it (where the browser does not allow copying, the link is shown instead). Nothing is sent to a server: the whole app runs in your browser. Opening a share link replaces your source; the status bar then offers to restore the previous one, and the link is removed from the address bar so a later reload keeps your newer work.

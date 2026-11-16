@@ -1,12 +1,30 @@
 import { useEffect, useRef } from 'react';
-import { EditorState, StateEffect, StateField, type Extension } from '@codemirror/state';
+import { Annotation, Compartment, EditorState, StateEffect, StateField, type Extension } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers, Decoration, type DecorationSet, highlightActiveLine, drawSelection } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { StreamLanguage, syntaxHighlighting, HighlightStyle, bracketMatching } from '@codemirror/language';
-import { setDiagnostics } from '@codemirror/lint';
+import { setDiagnostics, lintGutter } from '@codemirror/lint';
 import { tags } from '@lezer/highlight';
 import { useStore } from './store';
 import { autoLambdaEdit } from './autoLambda';
+import { useIsDark } from './theme';
+
+/** Marks changes that come from the store (examples, edits, share links), not from typing. */
+const External = Annotation.define<boolean>();
+
+// Colours from the page's CSS variables, so the editor follows the light and dark themes. The
+// dark flag (a compartment) also switches CodeMirror's own base theme.
+const darkMode = new Compartment();
+const editorTheme = EditorView.theme({
+  '.cm-selectionBackground': { background: 'color-mix(in srgb, var(--accent) 22%, transparent)' },
+  '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground': { background: 'color-mix(in srgb, var(--accent) 34%, transparent)' },
+  '.cm-tooltip': { background: 'var(--panel)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '6px', boxShadow: '0 6px 18px rgb(0 0 0 / 0.25)' },
+  '.cm-tooltip.cm-tooltip-lint': { maxWidth: '420px' },
+  '.cm-diagnostic': { padding: '4px 8px', fontFamily: 'inherit', fontSize: '13px' },
+  '.cm-diagnostic-error': { borderLeft: '4px solid var(--danger)' },
+  '.cm-diagnostic-warning': { borderLeft: '4px solid var(--warn)' },
+  '.cm-matchingBracket': { background: 'color-mix(in srgb, var(--accent) 25%, transparent)', outline: 'none' },
+});
 
 const lambdaLang = StreamLanguage.define<{ defLine: boolean }>({
   startState: () => ({ defLine: false }),
@@ -58,8 +76,17 @@ export function Editor() {
   const program = useStore((s) => s.program);
   const hover = useStore((s) => s.hover);
   const index = useStore((s) => s.index);
+  const dark = useIsDark();
+  /** Typed text waits briefly before it is compiled; this is the pending commit. */
+  const pending = useRef<number | undefined>(undefined);
 
   useEffect(() => {
+    const commit = (v: EditorView) => {
+      window.clearTimeout(pending.current);
+      pending.current = undefined;
+      const text = v.state.doc.toString();
+      if (text !== useStore.getState().source) useStore.getState().setSource(text);
+    };
     const autoLambda = EditorView.inputHandler.of((v, from, to, text) => {
       const st = useStore.getState();
       if (!st.settings.autoLambda) return false;
@@ -68,23 +95,25 @@ export function Editor() {
       v.dispatch({ changes: { from: e.from, to: e.to, insert: e.insert }, selection: { anchor: e.anchor } });
       return true;
     });
+    // these act on what was just typed, so a pending commit goes through first
     const runKeys = keymap.of([
-      { key: 'Mod-Enter', run: () => { useStore.getState().runToNormal(); return true; } },
-      { key: 'Alt-ArrowRight', run: () => { useStore.getState().stepForward(); return true; } },
-      { key: 'Alt-ArrowLeft', run: () => { useStore.getState().stepBack(); return true; } },
+      { key: 'Mod-Enter', run: (v) => { commit(v); useStore.getState().runToNormal(); return true; } },
+      { key: 'Alt-ArrowRight', run: (v) => { commit(v); useStore.getState().stepForward(); return true; } },
+      { key: 'Alt-ArrowLeft', run: (v) => { commit(v); useStore.getState().stepBack(); return true; } },
     ]);
-    let timer: number | undefined;
     const onChange = EditorView.updateListener.of((u) => {
-      if (!u.docChanged) return;
-      window.clearTimeout(timer);
-      const text = u.state.doc.toString();
-      timer = window.setTimeout(() => useStore.getState().setSource(text), 150);
+      // changes pushed in from the store are already there; echoing them back would reset the
+      // timeline, the selection and the status message
+      if (!u.transactions.some((tr) => tr.docChanged && !tr.annotation(External))) return;
+      window.clearTimeout(pending.current);
+      pending.current = window.setTimeout(() => commit(u.view), 150);
     });
     const exts: Extension[] = [
-      lineNumbers(), history(), drawSelection(), highlightActiveLine(), bracketMatching(),
+      lineNumbers(), lintGutter(), history(), drawSelection(), highlightActiveLine(), bracketMatching(),
       lambdaLang, syntaxHighlighting(highlight), markField,
       autoLambda, runKeys, keymap.of([...defaultKeymap, ...historyKeymap]), onChange,
-      EditorView.lineWrapping,
+      EditorView.lineWrapping, editorTheme, darkMode.of(EditorView.darkTheme.of(dark)),
+      EditorView.contentAttributes.of({ 'aria-label': 'Source' }),
     ];
     const v = new EditorView({ state: EditorState.create({ doc: useStore.getState().source, extensions: exts }), parent: host.current! });
     view.current = v;
@@ -93,13 +122,30 @@ export function Editor() {
       v.dispatch({ changes: { from: sel.from, to: sel.to, insert: s }, selection: { anchor: sel.from + s.length } });
       v.focus();
     });
-    return () => { useStore.getState().registerInsert(null); v.destroy(); };
+    useStore.getState().registerReveal((from, to) => {
+      const len = v.state.doc.length;
+      const a = Math.min(from, len), b = Math.min(Math.max(to, from), len);
+      v.dispatch({ selection: { anchor: a, head: b }, scrollIntoView: true });
+      v.focus();
+    });
+    return () => {
+      window.clearTimeout(pending.current);
+      useStore.getState().registerInsert(null);
+      useStore.getState().registerReveal(null);
+      v.destroy();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // external source changes (examples menu, share links)
+  useEffect(() => { view.current?.dispatch({ effects: darkMode.reconfigure(EditorView.darkTheme.of(dark)) }); }, [dark]);
+
+  // external source changes (examples menu, edits, share links)
   useEffect(() => {
     const v = view.current;
-    if (v && v.state.doc.toString() !== source) v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: source } });
+    if (!v || v.state.doc.toString() === source) return;
+    window.clearTimeout(pending.current); // the store's text wins over anything not yet committed
+    pending.current = undefined;
+    v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: source }, annotations: External.of(true) });
   }, [source]);
 
   useEffect(() => {

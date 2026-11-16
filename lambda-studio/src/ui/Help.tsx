@@ -16,35 +16,43 @@ const SHORTCUTS: [string, string][] = [
   ['Alt + → / Alt + ←', 'Step forward / back'],
   ['Double-click', 'Reduce the redex under the pointer (text, TeX or diagram)'],
   ['Click', 'Select a subterm for editing (click again to clear)'],
-  ['↑ ↓ ← →', 'With a selection: parent, first child, previous / next sibling'],
-  ['Enter', 'With a selection: β-reduce it if it is a redex'],
-  ['Delete', 'With a selection: remove that side of an application'],
+  ['↑ ↓ ← →', 'With a selection (not on a button or field): parent, first child, previous / next sibling'],
+  ['Enter', 'With a selection (not on a button or field): β-reduce it if it is a redex'],
+  ['Delete', 'With a selection (not on a button or field): remove that side of an application'],
   ['Esc', 'Clear the selection, close dialogs'],
   ['Ctrl + wheel, pinch', 'Zoom the diagram; drag to pan'],
   ['?', 'This help'],
 ];
 
 const typing = (el: Element | null) => !!el && (el.closest('input, textarea, select, [contenteditable="true"], .cm-editor, math-field') !== null);
+/**
+ * The term-navigation keys (arrows, Enter, Delete) act on the selection only when nothing else
+ * has focus or the diagram has it: on a button, link, tab or field they keep their usual meaning.
+ */
+const onTerm = (el: Element | null) => !el || el === document.body || el.closest('.diagram-wrap') !== null;
+/** Modal dialogs (Help, Export) handle their own keys; Esc closes them natively. */
+const modalOpen = () => document.querySelector('dialog[open]') !== null;
 
 export function useShortcuts() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || modalOpen()) return;
       const st = useStore.getState();
-      if (e.altKey && e.key === 'ArrowRight' && !typing(document.activeElement)) { e.preventDefault(); st.stepForward(); return; }
-      if (e.altKey && e.key === 'ArrowLeft' && !typing(document.activeElement)) { e.preventDefault(); st.stepBack(); return; }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !typing(document.activeElement)) { e.preventDefault(); st.runToNormal(); return; }
-      if (typing(document.activeElement) || e.ctrlKey || e.metaKey || e.altKey) return;
+      const active = document.activeElement;
+      if (e.altKey && e.key === 'ArrowRight' && !typing(active)) { e.preventDefault(); st.stepForward(); return; }
+      if (e.altKey && e.key === 'ArrowLeft' && !typing(active)) { e.preventDefault(); st.stepBack(); return; }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !typing(active)) { e.preventDefault(); st.runToNormal(); return; }
+      if (typing(active) || e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === '?') { e.preventDefault(); useHelp.getState().set(true); return; }
       const sel = st.selected;
       const term = currentTerm(st);
       if (e.key === 'Escape') {
-        if (useHelp.getState().open) useHelp.getState().set(false);
-        else if (sel !== null) st.select(null);
+        if (sel !== null) st.select(null);
         else if (useTutorial.getState().open) useTutorial.getState().set({ open: false });
         return;
       }
-      if (!term) return;
-      const inDiagram = !!document.activeElement?.closest('.diagram-wrap');
+      if (!term || !onTerm(active)) return;
+      const inDiagram = !!active?.closest('.diagram-wrap');
       if (sel === null) { if (inDiagram && e.key.startsWith('Arrow')) { e.preventDefault(); st.select(''); } return; }
       const valid = (p: string) => { try { getAt(term, p); return true; } catch { return false; } };
       let next: string | null = null;

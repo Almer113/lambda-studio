@@ -17,6 +17,7 @@ import { EditBar } from './EditBar';
 import { startDefDrag } from './dnd';
 import { useTutorial } from './Tutorial';
 import { useHelp } from './Help';
+import { NoTerm } from './NoTerm';
 
 function useTexSetting(id: string): [boolean, (v: boolean) => void] {
   const tex = useStore((s) => s.settings.tex[id] ?? false);
@@ -59,7 +60,7 @@ export function CurrentTerm() {
           <ViewToggle tex={asTex} onChange={setAsTex} />
         </span>
       </div>
-      {!term && <div className="empty">Nothing to show yet.</div>}
+      {!term && <NoTerm />}
       {term && printed && tex !== null && (
         <TexView tex={tex} className="term-tex" hover={hover} redex={redex} onHover={(p) => setHover(p, 'text')} onDoubleClick={reduceInnermost} selected={selected} onSelect={select} />
       )}
@@ -67,7 +68,8 @@ export function CurrentTerm() {
       {term && !printed && <div className="empty">Term too large to print ({size(term)} nodes).</div>}
       {via?.note && <div className="note">{via.note}</div>}
       <EditBar />
-      {term && selected === null && <p className="hint">Click part of the term or a line of the diagram to select it and edit.</p>}
+      {/* always one line, so selecting does not move the panels below (double-clicks land there) */}
+      {term && <p className="hint">{selected === null ? 'Click part of the term or a line of the diagram to select it and edit.' : 'Selected: the editing toolbar is at the bottom of the window (Esc clears).'}</p>}
     </div>
   );
 }
@@ -88,8 +90,8 @@ export function Controls() {
   return (
     <div className="controls">
       <div className="buttons">
-        <button onClick={() => s.goto(0)} disabled={s.index === 0} title="Back to the start" aria-label="Back to the start">⏮</button>
-        <button onClick={s.stepBack} disabled={s.index === 0} title="Step back (Alt+←)">◀ Back</button>
+        <button onClick={() => s.goto(0)} disabled={s.index === 0 || !!s.running} title="Back to the start" aria-label="Back to the start">⏮</button>
+        <button onClick={s.stepBack} disabled={s.index === 0 || !!s.running} title="Step back (Alt+←)">◀ Back</button>
         <button className="primary" onClick={() => s.stepForward()} disabled={!term || (atEnd && !hasNext) || !!s.running} title="One reduction step (Alt+→)">Step ▶</button>
         <button onClick={() => s.setPlaying(!s.playing)} disabled={!term || !!s.running || (atEnd && !hasNext)} title="Play steps automatically">{s.playing ? '⏸ Pause' : '⏵ Play'}</button>
         <button onClick={s.runToNormal} disabled={!term || !!s.running || !hasNext} title="Reduce to normal form, recording steps (Ctrl+Enter)">Run ⏭</button>
@@ -101,11 +103,16 @@ export function Controls() {
         </label>
       </div>
       <div className="timeline">
-        <input type="range" min={0} max={Math.max(0, s.history.length - 1)} value={s.index} onChange={(e) => s.goto(Number(e.target.value))} disabled={s.history.length < 2} aria-label="Reduction timeline" />
+        <input type="range" min={0} max={Math.max(0, s.history.length - 1)} value={s.index} onChange={(e) => s.goto(Number(e.target.value))} disabled={s.history.length < 2 || !!s.running} aria-label="Reduction timeline" />
         <span className="tl-label">step {s.index} / {Math.max(0, s.history.length - 1)}</span>
       </div>
       {s.running && <div className="status running">{s.running.kind === 'run' ? `Reducing… ${s.running.steps} steps, ${s.running.size} nodes` : 'Normalizing…'}</div>}
-      {!s.running && s.message && <div className={`status ${s.message.tone}`} role={s.message.tone === 'error' ? 'alert' : undefined}>{s.message.text}</div>}
+      {!s.running && s.message && (
+        <div className={`status ${s.message.tone}`} role={s.message.tone === 'error' ? 'alert' : undefined}>
+          {s.message.text}
+          {s.message.action && <> <button type="button" className="linklike" onClick={s.message.action.run}>{s.message.action.label}</button></>}
+        </div>
+      )}
     </div>
   );
 }
@@ -117,7 +124,7 @@ export function Inspector() {
   const strategy = useStore((s) => s.settings.strategy);
   const stats = useMemo(() => (term && size(term) < 200000 ? termStats(term, eta) : null), [term, eta]);
   const typed = useMemo(() => (term && size(term) < 20000 ? inferType(term) : null), [term]);
-  if (!term || !stats) return <div className="panel inspector"><div className="panel-head"><h2>Inspector</h2></div><div className="empty">—</div></div>;
+  if (!term || !stats) return <div className="panel inspector"><div className="panel-head"><h2>Inspector</h2></div>{term ? <div className="empty">—</div> : <NoTerm text="—" brief />}</div>;
   const strat = STRATEGIES.find((s) => s.id === strategy)!;
   const values = [...stats.decoded.map((d) => d.text), ...(stats.normal && stats.closed ? describeMore(term) : [])];
   return (
@@ -188,6 +195,25 @@ export function Library() {
 }
 
 // --- Header ------------------------------------------------------------------
+/**
+ * Copy a share link. The page URL is left alone (a link written into the address bar would bring
+ * this snapshot back over later work on reload). Without clipboard access (e.g. plain http) the
+ * link is shown for copying by hand.
+ */
+async function copyShareLink(source: string, format: FormatId | 'auto', copied: () => void) {
+  let url: string;
+  try { url = await shareLink(source, format); }
+  catch { useStore.setState({ message: { text: 'Could not create a share link in this browser.', tone: 'error' } }); return; }
+  try {
+    if (!navigator.clipboard) throw new Error('no clipboard');
+    await navigator.clipboard.writeText(url);
+    copied();
+    return;
+  } catch { /* no clipboard access: show the link instead */ }
+  try { window.prompt('Copy this link:', url); }
+  catch { useStore.setState({ message: { text: `Copy this link: ${url}`, tone: 'info' } }); } // embedded pages may not allow prompt()
+}
+
 export function Header() {
   const s = useStore();
   const [shared, setShared] = useState(false);
@@ -216,7 +242,7 @@ export function Header() {
         </label>
         <label className="check" title="Also contract η-redexes λx.M x → M"><input type="checkbox" checked={s.settings.eta} onChange={(e) => s.setSetting('eta', e.target.checked)} /> η</label>
         <label className="check" title="Read λxy.xy as λx.λy.x y"><input type="checkbox" checked={s.settings.singleLetter} onChange={(e) => s.setSetting('singleLetter', e.target.checked)} /> Single-letter vars</label>
-        <button onClick={() => { shareLink(s.source, s.format).then((url) => { history.replaceState(null, '', url); return navigator.clipboard?.writeText(url); }).then(() => { setShared(true); setTimeout(() => setShared(false), 1500); }).catch(() => {}); }} title="Copy a link that opens this source (compressed into the URL)">{shared ? 'Link copied' : 'Share link'}</button>
+        <button onClick={() => copyShareLink(s.source, s.format, () => { setShared(true); setTimeout(() => setShared(false), 1500); })} title="Copy a link that opens this source (compressed into the URL)">{shared ? 'Link copied' : 'Share link'}</button>
         <button onClick={() => useExport.getState().show()}>Export…</button>
         <button onClick={() => useTutorial.getState().set({ open: !useTutorial.getState().open })} aria-pressed={useTutorial((t) => t.open)}>Tutorial</button>
         <button onClick={() => useHelp.getState().set(true)} aria-label="Help and keyboard shortcuts" title="Help and keyboard shortcuts (?)">?</button>
