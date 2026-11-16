@@ -439,6 +439,7 @@ export function DiagramView() {
             {hoveredSegment && <> · {describeSeg(hoveredSegment)}</>}
           </div>
         )}
+        {diagram && <div className="diagram-how" aria-hidden>{COARSE ? 'Double-tap a link to reduce · drag to pan · pinch to zoom' : 'Double-click a link to reduce · drag to pan · Ctrl+wheel to zoom'}</div>}
         {dropAt && <div className="drop-hint">Drop to replace this {dropAt.kind === 'var' ? 'variable' : dropAt.kind === 'lam' ? 'abstraction' : 'application'}</div>}
       </div>
       {diagram && <Legend mode={settings.colorMode} redex={redex !== null && !useCanvas} />}
@@ -471,10 +472,10 @@ const COARSE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)
 function Legend({ mode, redex }: { mode: ColorMode; redex: boolean }) {
   return (
     <div className="legend">
-      {mode === 'binder' && <span>Each λ and the variables it binds share a colour; <span className="sw kind-app" /> applications are grey; <span className="sw kind-free" /> free variables are red.</span>}
+      {mode === 'binder' && <span>A λ and the variables it binds share a colour · <span className="sw kind-app" /> application <span className="sw kind-free" /> free variable</span>}
       {mode === 'depth' && <span>Colour follows depth: the hue shifts with each enclosing λ.</span>}
       {mode === 'kind' && <span><span className="sw kind-lam" /> λ <span className="sw kind-app" /> application <span className="sw kind-var" /> bound variable <span className="sw kind-free" /> free variable</span>}
-      {redex && <span>The next redex glows: <span className="sw glow hl-fn" /> its function λ and variables <span className="sw glow hl-arg" /> argument <span className="sw glow hl-link" /> application link</span>}
+      {redex && <span>Next redex glows: <span className="sw glow hl-fn" /> function <span className="sw glow hl-arg" /> argument <span className="sw glow hl-link" /> link</span>}
       <span className="legend-how">{COARSE ? 'Double-tap a link to reduce · drag to pan · pinch to zoom' : 'Double-click a link to reduce · drag to pan · Ctrl+wheel to zoom'}</span>
     </div>
   );

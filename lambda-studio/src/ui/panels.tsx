@@ -194,6 +194,9 @@ function TypeView({ text, tex, prop }: { text: string; tex: string; prop: string
 const PRELUDE_SRC = new Map(PRELUDE.map((e) => [e.name, e.src]));
 const short = (s: string) => (s.length > 160 ? s.slice(0, 160) + '…' : s);
 
+/** "Constant (Kestrel): K x y = x. …" → "Constant (Kestrel)": the rest is in the tooltip. */
+const shortDoc = (doc?: string) => (doc ?? '').split(/: |\. /)[0];
+
 export function Library() {
   const program = useStore((s) => s.program);
   const info = useMemo(() => preludeInfo(), []);
@@ -222,7 +225,7 @@ export function Library() {
           <button className="lib-title" aria-expanded={!!open[g]} onClick={() => setOpen((o) => ({ ...o, [g]: !o[g] }))}>{open[g] ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />} {g}</button>
           {open[g] && items.map((d) => (
             <button key={d.name} className="lib-item" draggable onDragStart={(e) => startDefDrag(e, d.name)} onClick={() => insertIntoSource(d.name, d.name)} title={`${d.doc}\n\n${d.name} = ${PRELUDE_SRC.get(d.name) ?? ''}`}>
-              <span className="lib-name">{d.name}</span><span className="lib-doc">{d.doc}</span>
+              <span className="lib-name">{d.name}</span><span className="lib-doc">{shortDoc(d.doc)}</span>
             </button>
           ))}
         </div>

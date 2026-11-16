@@ -6,8 +6,8 @@ New to the λ-calculus? The **Tutorial** (the graduation-cap button in the heade
 
 | Area | What it is for |
 |---|---|
-| **Library** (left) | Built-in definitions grouped by topic. Click a name to insert it, or drag it onto a line of the diagram. Your own definitions are listed at the top. |
-| **Encode data** (left) | Turns a number, Boolean, list, string, pair, Maybe or Either into a λ-term (Church, Scott, Parigot or binary). |
+| **Library** (left, first tab) | Built-in definitions grouped by topic. Each name shows a short description; point at it for the full one and its definition. Click a name to insert it, or drag it onto a line of the diagram. Your own definitions are listed at the top. |
+| **Encode data** (left, second tab) | Turns a number, Boolean, list, string, pair, Maybe or Either into a λ-term (Church, Scott, Parigot or binary). |
 | **Source** (centre) | The editor. Type `\` for λ. The eye button shows a typeset preview underneath (off by default). |
 | **Controls** | Step, back, play, run, fast normalizer, and a timeline of the steps taken. The bar stays at the top of the centre column while you scroll. |
 | **Current term** | The term at the current step, as text or typeset. Click a part to select it for editing. The tag button turns names and numerals on and off. If the last line has a syntax error, the last definition is shown instead, with a note saying so. |

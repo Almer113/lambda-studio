@@ -75,6 +75,10 @@ async function point(selector: string) {
   }
 }
 
+/** Between tablet and wide screens the drawer starts on the left, over the library, rather than
+ *  over Notations and Tools (which lessons use more). It still moves when it covers what it points at. */
+const START_LEFT = typeof innerWidth === 'number' && innerWidth > 860 && innerWidth < 1500;
+
 /** Closed, the tutorial subscribes to nothing: goals are checked only while it is open. */
 export function Tutorial() {
   const open = useTutorial((t) => t.open);
@@ -132,7 +136,7 @@ function TutorialDrawer() {
   const last = t.lesson === LESSONS.length - 1 && t.step === lesson.steps.length - 1;
 
   return (
-    <aside className="tutorial" aria-label="Tutorial" ref={root}
+    <aside className={`tutorial${START_LEFT ? ' tut-left' : ''}`} aria-label="Tutorial" ref={root}
       onKeyDown={(e) => { if (e.key === 'Escape' && !e.defaultPrevented && (e.target as HTMLElement).tagName !== 'SELECT') { e.stopPropagation(); t.set({ open: false }); } }}>
       <div className="tut-head">
         <h2 tabIndex={-1}>Tutorial</h2>

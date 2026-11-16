@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pencil, Workflow, Wrench, Languages, Library as LibraryIcon, Eye } from 'lucide-react';
+import { Pencil, Workflow, Wrench, Languages, Library as LibraryIcon, Eye, Binary } from 'lucide-react';
 import { Editor } from './Editor';
 import { DiagramView } from './DiagramView';
 import { Library, CurrentTerm, Controls, Inspector } from './panels';
@@ -36,6 +36,27 @@ const SIDE_TABS: TabDef<SideTab>[] = [
 ];
 
 
+type LeftTab = 'library' | 'data';
+const LEFT_TABS: TabDef<LeftTab>[] = [
+  { id: 'library', label: 'Library', icon: LibraryIcon, title: 'Built-in definitions and your own' },
+  { id: 'data', label: 'Encode data', icon: Binary, title: 'Numbers, Booleans, lists, strings… as λ-terms' },
+];
+
+/** The library and Encode data share the left-hand column, as tabs. Both stay mounted (the tutorial
+ *  points at the library), the hidden one is just not shown. */
+function LeftPanel() {
+  const [tab, setTab] = useState<LeftTab>('library');
+  return (
+    <div className="panel left-panel">
+      <TabList<LeftTab> tabs={LEFT_TABS} value={tab} onChange={setTab} label="Library and data" idPrefix="left" className="side-tabs" />
+      <div id="left-panel" role="tabpanel" aria-labelledby={`left-tab-${tab}`} className="left-body">
+        <div hidden={tab !== 'library'} className="left-pane"><Guard name="Library"><Library /></Guard></div>
+        <div hidden={tab !== 'data'} className="left-pane"><Guard name="Encode data"><DataPanel /></Guard></div>
+      </div>
+    </div>
+  );
+}
+
 /** Notations and Tools share the right-hand column, as tabs. When the column is hidden (another
  *  section is open on a phone) their content is not mounted, so tables and conversions don't keep
  *  recomputing, and background jobs stop, for a term nobody is looking at. */
@@ -70,7 +91,7 @@ export function App() {
       <Guard name="The header" compact><Header /></Guard>
       <TabList tabs={MOBILE_TABS} value={tab} onChange={setTab} label="Sections" idPrefix="mobile" className="tabs" />
       <main className="layout" id="mobile-panel">
-        <aside className="col-left"><Guard name="Library"><Library /></Guard><Guard name="Encode data"><DataPanel /></Guard></aside>
+        <aside className="col-left"><LeftPanel /></aside>
         <section className="col-center">
           <div className="panel editor-panel">
             <div className="panel-head">

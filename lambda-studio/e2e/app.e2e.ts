@@ -43,6 +43,7 @@ test('keyboard shortcuts act only outside text fields', async ({ page }) => {
   await expect(label(page)).toHaveText('step 0 / 0');
 
   // in a text field: Alt+→ neither steps nor goes Back, and ? is typed, not the help
+  await page.getByRole('tab', { name: 'Encode data' }).click();
   const field = page.getByRole('textbox', { name: 'Value' });
   await field.click();
   await page.keyboard.press('Alt+ArrowRight');
@@ -208,4 +209,17 @@ test('the strategy menu sets the strategy and η, and its button says the choice
   await expect(button).toHaveText('Applicative order + η');
   expect(await page.evaluate(() => { const s = (window as any).__store.getState().settings; return [s.strategy, s.eta]; })).toEqual(['applicative', true]);
   await page.evaluate(() => (window as any).__store.getState().replaceSettings());
+});
+
+test('on a 1440×900 screen the diagram and its legend fit without scrolling', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await open(page);
+  await setSource(page, 'PLUS 2 3');
+  const fits = await page.evaluate(() => {
+    const c = document.querySelector('.col-center')!;
+    const legend = document.querySelector('.legend')!.getBoundingClientRect();
+    return { scrolls: c.scrollHeight > c.clientHeight + 1, legendBottom: legend.bottom, height: innerHeight };
+  });
+  expect(fits.scrolls).toBe(false);
+  expect(fits.legendBottom).toBeLessThanOrEqual(fits.height);
 });
