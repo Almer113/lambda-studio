@@ -1,6 +1,6 @@
 # Lambda Studio user guide
 
-New to the λ-calculus? The **Tutorial** (the graduation-cap button in the header) opens on your first visit: ten short lessons load examples and check your progress. Press **?** for help, keyboard shortcuts, this guide and the notation reference.
+New to the λ-calculus? The **Tutorial** (the graduation-cap button in the header) opens on your first visit as a drawer at the right (on tablets and phones, along the bottom): ten short lessons load examples and check your progress. When the drawer covers what a lesson points at, it moves to the other side. Press **?** for help, keyboard shortcuts, this guide and the notation reference.
 
 ## The screen
 
@@ -8,14 +8,16 @@ New to the λ-calculus? The **Tutorial** (the graduation-cap button in the heade
 |---|---|
 | **Library** (left, first tab) | Built-in definitions grouped by topic. Each name shows a short description; point at it for the full one and its definition. Click a name to insert it, or drag it onto a line of the diagram. Your own definitions are listed at the top. |
 | **Encode data** (left, second tab) | Turns a number, Boolean, list, string, pair, Maybe or Either into a λ-term (Church, Scott, Parigot or binary). |
-| **Source** (centre) | The editor. Type `\` for λ. The eye button shows a typeset preview underneath (off by default). |
-| **Controls** | Step, back, play, run, fast normalizer, and a timeline of the steps taken. The bar stays at the top of the centre column while you scroll. |
-| **Current term** | The term at the current step, as text or typeset. Click a part to select it for editing. The tag button turns names and numerals on and off. If the last line has a syntax error, the last definition is shown instead, with a note saying so. |
-| **Tromp diagram** | The term as a diagram. Hover, click, double-click, zoom and pan. The legend under it explains the colours. |
+| **Source** (centre) | The editor. Type `\` for λ. The eye button shows a typeset preview underneath (off by default). An empty source offers a few examples to start from: 2 + 3, Boolean logic, Definitions, Factorial 3, the Y combinator and Ω. |
+| **Controls** | Start, Back, Step, Play, Run and Normalize, the **Speed** menu, and a timeline of the steps taken (with a tick per step for runs of up to 80 steps). The bar stays at the top of the centre column while you scroll. |
+| **Current term** | The term at the current step, as text or typeset. Click a part to select it for editing. The tag button turns names and numerals on and off. If the last line has a syntax error, the last definition is shown instead, with a note saying so and a **Go to the error** link. |
+| **Tromp diagram** | The term as a diagram. It takes the height the panels above leave, so the diagram and its legend fit the window. Hover, click, double-click, zoom and pan (a reminder sits in the corner of the drawing). The legend under it explains the colours. |
 | **Inspector** (right) | Status, decoded value, size, BLC bits, closedness and the simple type. |
 | **Notations · Tools** (right, tabs) | Notations: the current term in every notation. One TeX/Text switch at the top typesets the λ notations; their copy menu copies as text or as LaTeX. Tools: pick one from the Tool menu: Expression → λ, truth tables, number tables, laws, data types, generators. |
 
-The header holds the **File** menu (new, open and save a workspace, copy a share link, export), the **Examples** menu (grouped by topic, with one example for each input notation), the **Input** format and the **Strategy** menu (the reduction strategy and η). On the right: **Settings** (gear), the tutorial, help and the theme.
+The header holds the **File** menu (new, open and save a workspace, copy a share link, export), the **Examples** menu (grouped by topic, with one example for each input notation), the **Input** format and the **Strategy** button, which names the current choice ("Normal order", or "Normal order + η") and opens the strategies with a line on each. On the right: **Settings** (gear), the tutorial, help and the theme.
+
+On medium-width screens the Input menu drops its visible label (it says what it is). On a tablet (640 to 860 pixels wide) the page has two columns: the source, term and diagram on the left; the inspector, Notations, Tools, Library and Encode data on the right. The strategy, tutorial, help and theme move into the **⋯** menu, and the diagram toolbar keeps to one row (see below).
 
 Icon buttons name themselves in a tooltip when you point at them or reach them with Tab.
 
@@ -57,11 +59,12 @@ Each λ is a horizontal bar, each variable a vertical line from its binder's bar
 - Click a line to select its subterm (the rest of the diagram dims and the selected part gets a box); Ctrl + wheel or pinch to zoom (the zoom buttons zoom about the centre); drag to pan; the fit button fits the drawing again.
 - Colour modes: by binder, by depth, by kind, or monochrome.
 - With the film button (animate) on, each single β-step morphs smoothly from the old diagram to the new one. The crosshair button shows or hides the next redex.
+- On phones and tablets the toolbar keeps the crosshair, fit and zoom buttons; the style, the colour mode, animation and export are in its **⋯** menu.
 - Above about 6000 lines the diagram is drawn on a canvas. Hover and selection still work; zoomed out, lines blend into a grey overview.
 
 ## Building terms (the creator)
 
-Select a subterm by clicking it in the diagram or the current term (or press an arrow key with the diagram focused, then use ↑ ↓ ← → to move). With the diagram focused, Enter β-reduces the selection and Delete removes it. The edit bar appears at the bottom of the window, over the centre column, with its actions in groups (Reduce, Wrap, Change, Name) divided by thin lines; **Parent** sits next to the selection. The page keeps room below so the bar does not cover the diagram. It offers:
+Select a subterm by clicking it in the diagram or the current term (or press an arrow key with the diagram focused, then use ↑ ↓ ← → to move). With the diagram focused, Enter β-reduces the selection and Delete removes it. The edit bar appears at the bottom of the window, over the centre column, with its actions in groups (Reduce, Wrap, Change, Name) divided by thin lines; **Parent** sits next to the selection. The page keeps room below so the bar does not cover the diagram (with auto-fit on, the diagram re-fits to the smaller space and grows back when you clear the selection). On a phone the buttons simply flow in rows, without dividers. It offers:
 
 | Action | Effect |
 |---|---|
@@ -83,18 +86,18 @@ Choose a tool from the **Tool** menu. When the term suits another tool better (a
 - **Truth table:** applies the current term to all combinations of TRUE/FALSE (up to 10 inputs) and gives the canonical DNF and CNF and a minimal formula.
 - **Number table:** values on Church numerals 0…N for one or two arguments, with a guessed closed form. The guess is labelled a conjecture: it fits the table, it is not a proof.
 - **Laws:** compares the βη-normal forms of two terms. Different normal forms mean different terms even if they agree on all numerals (Böhm's theorem).
-- **Data types:** `data Tree = Leaf | Node Tree Nat Tree` → constructors, fold or case, and a SIZE function, in the Church, Scott or Parigot encoding.
+- **Data types:** `data Tree = Leaf | Node Tree Nat Tree` → constructors, fold or case, and a SIZE function, in the Church, Scott or Parigot encoding. **Use as source** replaces the source with the definitions and a small example using them.
 - **Generate:** the number of closed terms of each size in bits (OEIS A114852), uniformly random terms, the list of all terms of a size, and BBλ, the largest normal form a term of that size reaches. Terms that do not finish within the step budget are counted as undecided, and the BBλ value is then a lower bound.
 
 ## Exporting and sharing
 
-**File › Export…** (or the image button on the diagram) opens a dialog with:
+**File › Export…** (or the image button on the diagram; on phones and tablets, **Export the diagram…** in the diagram's **⋯** menu) opens a dialog with:
 
 - **Diagram:** SVG, PNG (1× to 16×), TikZ, Typst, or text art; light or dark, optionally transparent.
 - **Animation:** GIF or WebM of any range of recorded steps.
 - **Text & code:** reduction traces (named, de Bruijn, LaTeX `align*`), a Markdown summary, Tromp's `.lam`, `.blc` bits and `.blc8` bytes.
 - **Workspace:** save the source, input format and settings as JSON, and open it again later.
 
-**Settings** (the gear) holds the display options (numerals, how λt f.f is shown), the editor options and the limits for Run. Showing known parts by name is the tag button on **Current term**, the typeset preview is the eye button on **Source**, and the theme is the button at the right of the header. Settings are kept in this browser; **Reset all settings** restores the defaults.
+**Settings** (the gear) holds the display options (numerals, how λt f.f is shown), the editor options and the limits for Run. Showing known parts by name is the tag button on **Current term**, the typeset preview is the eye button on **Source**, and the theme is the button at the right of the header (in the **⋯** menu on phones and tablets). Settings are kept in this browser; **Reset all settings** restores the defaults.
 
 **File › Copy share link** copies a URL with the source compressed into it (where the browser does not allow copying, the link is shown instead). Nothing is sent to a server: the whole app runs in your browser. Opening a share link replaces your source; the status bar then offers to restore the previous one, and the link is removed from the address bar so a later reload keeps your newer work.
