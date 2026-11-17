@@ -463,6 +463,19 @@ button.linklike { background: none; border: 0; padding: 0; min-height: 0; color:
 .strategy-panel > .radio-row { border-top: 1px solid var(--border); border-radius: 0; padding-top: 8px; }
 .more-panel .field, .more-panel .check { color: var(--text); }
 .more-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.phone-only { display: none; }
+.more-panel .input-field { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-xs); color: var(--muted); }
+.more-panel .input-field select { width: 100%; font-size: var(--fs-md); }
+.diagram-tools-compact { flex-wrap: nowrap; gap: 4px; }
+.diagram-more-panel { display: flex; flex-direction: column; gap: 10px; padding: 6px 8px; width: 240px; max-width: calc(100vw - 48px); }
+.diagram-more-panel .field { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.source-strip { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--panel); padding: 0 12px; }
+.source-strip summary { display: flex; align-items: center; gap: 8px; min-height: var(--h-touch); cursor: pointer; font-size: var(--fs-sm); }
+.source-strip-label { font-weight: 600; flex: none; }
+.source-strip-line { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); color: var(--muted); }
+.source-strip .muted { flex: none; font-size: var(--fs-xs); }
+.source-strip-full { margin: 0 0 8px; font-family: var(--mono); font-size: var(--fs-sm); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 40vh; overflow: auto; }
+.source-strip > .linklike { margin-bottom: 10px; }
 
 /* --- tabs --- */
 .tablist { display: flex; gap: 4px; flex-wrap: wrap; }
@@ -530,12 +543,15 @@ button.linklike { background: none; border: 0; padding: 0; min-height: 0; color:
   .header-group > .field { font-size: 0; gap: 0; min-width: 0; flex: 1 1 0; } /* the menus say what they are */
   .header-group select { min-width: 0; width: 100%; max-width: 11em; font-size: var(--fs-md); }
   .header-group > select { flex: 1 1 0; }
-  .header-group > .popover > .icon-btn.with-text > span { display: none; }
   .tablist.tabs { overflow-x: auto; gap: 4px; padding: 6px 10px 0; }
   .tablist.tabs [role="tab"] { flex: 1 0 auto; justify-content: center; padding: 0 8px; font-size: var(--fs-xs); gap: 3px; }
   .legend-how { display: inline; margin-left: 0; }
   .diagram-how { display: none; }
   .left-pane:not([hidden]) { overflow: visible; }
+}
+@media (max-width: 639px) {
+  .header-input { display: none; }
+  .phone-only { display: block; }
 }
 @media (max-width: 400px) {
   .tablist.tabs [role="tab"] svg { display: none; }

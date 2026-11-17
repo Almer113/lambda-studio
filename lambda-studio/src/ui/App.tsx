@@ -36,6 +36,24 @@ const SIDE_TABS: TabDef<SideTab>[] = [
 ];
 
 
+/** On a phone's Diagram tab: the source in one line, opened to read it in full, with a way back to editing. */
+function SourceStrip({ onEdit }: { onEdit(): void }) {
+  const source = useStore((s) => s.source);
+  const first = source.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('--')).at(-1) ?? '';
+  const lines = source.trimEnd().split('\n').length;
+  return (
+    <details className="source-strip">
+      <summary>
+        <span className="source-strip-label">Source</span>
+        <code className="source-strip-line">{first || '(empty)'}</code>
+        {lines > 1 && <span className="muted">{lines} lines</span>}
+      </summary>
+      <pre className="source-strip-full">{source}</pre>
+      <button type="button" className="linklike" onClick={onEdit}>Edit the source</button>
+    </details>
+  );
+}
+
 type LeftTab = 'library' | 'data';
 const LEFT_TABS: TabDef<LeftTab>[] = [
   { id: 'library', label: 'Library', icon: LibraryIcon, title: 'Built-in definitions and your own' },
@@ -104,6 +122,7 @@ export function App() {
             <Editor />
             {preview && <Guard name="Preview"><SourcePreview /></Guard>}
           </div>
+          {phone && tab === 'diagram' && <SourceStrip onEdit={() => setTab('edit')} />}
           <Guard name="Controls"><Controls /></Guard>
           <Guard name="Current term"><CurrentTerm /></Guard>
           <Guard name="Tromp diagram"><DiagramView /></Guard>

@@ -10,7 +10,9 @@ import { useExport } from './ExportDialog';
 import { DEF_MIME, preludeOrUserTerm } from './dnd';
 import { useIsDark } from './theme';
 import { NoTerm } from './NoTerm';
-import { Film, Crosshair, Scan, ZoomIn, ZoomOut, ImageDown } from 'lucide-react';
+import { Film, Crosshair, Scan, ZoomIn, ZoomOut, ImageDown, Ellipsis } from 'lucide-react';
+import { Popover } from './Popover';
+import { useMedia } from './useMedia';
 import { IconButton } from './IconButton';
 
 const SVG_LIMIT = 6000; // segments; above this the diagram is drawn on a canvas
@@ -50,6 +52,7 @@ function hoverSet(d: Diagram, path: string, source: string | null): Segment[] {
 export function DiagramView() {
   const term = useStore(currentTerm);
   const settings = useStore((s) => s.settings);
+  const compact = useMedia('(max-width: 860px)'); // phones and tablets: one row of tools
   const hover = useStore((s) => s.hover);
   const hoverSource = useStore((s) => s.hoverSource);
   const setHover = useStore((s) => s.setHover);
@@ -335,6 +338,33 @@ export function DiagramView() {
     <div className="panel diagram-panel">
       <div className="panel-head">
         <h2>Tromp diagram</h2>
+        {compact ? (
+          <div className="toolbar diagram-tools-compact">
+            <IconButton icon={Crosshair} className="toggle" label="Highlight the next redex" pressed={settings.showRedex} onClick={() => useStore.getState().setSetting('showRedex', !settings.showRedex)} />
+            <IconButton icon={Scan} className="toggle" label="Fit the diagram to the view" pressed={autoFit} onClick={() => { setAutoFit(true); fit(); }} />
+            <IconButton icon={ZoomIn} label="Zoom in" onClick={() => zoomBy(1.25)} />
+            <IconButton icon={ZoomOut} label="Zoom out" onClick={() => zoomBy(1 / 1.25)} />
+            <Popover icon={Ellipsis} label="More diagram options" align="right" className="diagram-more">
+              {(close) => (
+                <div className="diagram-more-panel">
+                  <label className="field">Style
+                    <select value={settings.diagramStyle} onChange={(e) => useStore.getState().setSetting('diagramStyle', e.target.value as DiagramStyle)}>
+                      <option value="standard">Standard</option>
+                      <option value="alternative">Alternative</option>
+                    </select>
+                  </label>
+                  <label className="field">Colours
+                    <select value={settings.colorMode} onChange={(e) => useStore.getState().setSetting('colorMode', e.target.value as ColorMode)}>
+                      {COLOR_MODES.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    </select>
+                  </label>
+                  <label className="check"><input type="checkbox" checked={settings.animate} onChange={(e) => useStore.getState().setSetting('animate', e.target.checked)} /> Animate single β-steps</label>
+                  <IconButton icon={ImageDown} text="Export the diagram…" label="Export the diagram" disabled={!diagram} onClick={() => { close(); useExport.getState().show('diagram'); }} />
+                </div>
+              )}
+            </Popover>
+          </div>
+        ) : (
         <div className="toolbar">
           <select aria-label="Diagram style" value={settings.diagramStyle} onChange={(e) => useStore.getState().setSetting('diagramStyle', e.target.value as DiagramStyle)} title="Standard: lines for every variable reach the bottom. Alternative: Tromp's compact style, applications link right next to their parts.">
             <option value="standard">Standard</option>
@@ -351,6 +381,7 @@ export function DiagramView() {
           <IconButton icon={ZoomOut} label="Zoom out" onClick={() => zoomBy(1 / 1.25)} />
           <IconButton icon={ImageDown} label="Export the diagram" onClick={() => useExport.getState().show('diagram')} disabled={!diagram} />
         </div>
+        )}
       </div>
       <div
         className="diagram-wrap"

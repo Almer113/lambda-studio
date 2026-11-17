@@ -237,3 +237,36 @@ test('the tools point at the one that suits the term; a notation copies as text 
   await page.getByRole('menuitem', { name: 'Copy as LaTeX' }).click();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('\mathsf{AND}');
 });
+
+test('on a 375px phone the header, tabs and diagram tools fit; Input is in More; the source shows as a strip', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await open(page);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  // header: one row, nothing past the right edge
+  const header = await page.locator('.header').boundingBox();
+  expect(header!.height).toBeLessThan(56);
+  for (const b of await page.locator('.header button:visible').all()) {
+    const box = (await b.boundingBox())!;
+    expect(box.x + box.width).toBeLessThanOrEqual(375);
+  }
+  await expect(page.getByRole('button', { name: 'File' })).toContainText('File');
+  await expect(page.locator('.header-input')).toBeHidden();
+  await page.getByRole('button', { name: 'More options' }).click();
+  await expect(page.locator('.more-panel select')).toBeVisible();
+  await page.keyboard.press('Escape');
+  // the section tabs fit without scrolling
+  expect(await page.locator('.tablist.tabs').evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+  // diagram tools: one row
+  const tb = await page.locator('.diagram-panel .toolbar').boundingBox();
+  expect(tb!.height).toBeLessThan(40);
+  await page.getByRole('button', { name: 'More diagram options' }).click();
+  await expect(page.locator('.diagram-more-panel')).toBeVisible();
+  await page.keyboard.press('Escape');
+  // the source strip, and the way back to editing
+  const strip = page.locator('.source-strip');
+  await expect(strip.locator('summary')).toContainText('Source');
+  await strip.locator('summary').click();
+  await strip.getByRole('button', { name: 'Edit the source' }).click();
+  await expect(page.locator('.editor-panel')).toBeVisible();
+  await expect(strip).toHaveCount(0);
+});

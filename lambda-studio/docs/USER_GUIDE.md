@@ -19,7 +19,7 @@ The header holds the **File** menu (new, open and save a workspace, copy a share
 
 Icon buttons name themselves in a tooltip when you point at them or reach them with Tab.
 
-On a phone the areas are behind the tabs **Edit · Diagram · Tools · Notations · Library**, and the strategy and η options, tutorial, help and theme are in the **⋯** menu.
+On a phone the areas are behind the tabs **Edit · Diagram · Tools · Notations · Library**, and the input format, the strategy and η options, tutorial, help and theme are in the **⋯** menu. The Diagram tab shows the source as a one-line strip at the top: tap it to read it all, or **Edit the source** to go back to the editor. On phones and tablets the diagram keeps redex highlighting, fit and zoom in its toolbar; style, colours, animation and export are in its own **⋯** menu.
 
 ## Writing terms
 

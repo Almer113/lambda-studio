@@ -87,7 +87,7 @@ function InputSelect() {
   const setFormat = useStore((s) => s.setFormat);
   const phone = useMedia('(max-width: 639px)');
   return (
-    <label className="field">Input
+    <label className="field input-field">Input
       <select value={format} onChange={(e) => setFormat(e.target.value as FormatId | 'auto')}>
         <option value="auto">{phone ? 'Auto' : 'Auto-detect'}{format === 'auto' ? ` (${FORMATS.find((f) => f.id === detected)?.name})` : ''}</option>
         {(['λ', 'Combinators', 'Code', 'Bits & data'] as const).map((g) => (
@@ -193,7 +193,7 @@ export function Header() {
       <div className="header-group">
         <FileMenu />
         <ExamplesSelect />
-        <InputSelect />
+        <span className="header-input"><InputSelect /></span>
       </div>
       <div className="header-group wide-only">
         <StrategyMenu />
@@ -208,6 +208,7 @@ export function Header() {
         <Popover icon={Ellipsis} label="More options" align="right" className="narrow-only">
           {(close) => (
             <div className="more-panel">
+              <div className="phone-only"><InputSelect /></div>
               <StrategyOptions />
               <div className="more-actions">
                 <IconButton icon={GraduationCap} text="Tutorial" label="Tutorial" pressed={tutorialOpen} onClick={() => { close(); useTutorial.getState().set({ open: !tutorialOpen }); }} />
