@@ -5,3 +5,6 @@ dist/
 coverage/
 tools/AIT/
 dist-single/
+deploy/
+.deploy-next/
+.deploy-old/

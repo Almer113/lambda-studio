@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc -p .",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "deploy": "node scripts/deploy.mjs",
+    "serve": "node scripts/serve.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.1",

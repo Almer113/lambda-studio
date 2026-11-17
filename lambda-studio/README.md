@@ -47,6 +47,27 @@ npm run dev            # http://localhost:5173
 | `npm run build` | Production build in `dist/` |
 | `npm run build:single` | One self-contained `dist-single/index.html` (about 3 MB) that works offline, from a USB stick or as an e-mail attachment |
 
+## A permanent local copy (and Tailscale)
+
+The deployed copy is separate from the dev server: it serves a build kept in `deploy/`, so work in progress never breaks it.
+
+| Command | What it does |
+|---|---|
+| `npm run deploy` | Type-check, build into `.deploy-next/`, then swap it into `deploy/`. The running server picks it up at once; `deploy/version.txt` says which commit is live |
+| `npm run serve` | Serve `deploy/` on `http://127.0.0.1:4180` (`--port`, `--host` to change). No dependencies; gzips text files and caches the hashed assets |
+
+**Starting at logon (Windows).** `scripts/start-server.vbs` starts the server with no window and appends its log to `%LOCALAPPDATA%\LambdaStudio\server.log`. A shortcut to it in the Startup folder (`shell:startup`) runs it at logon. To stop the server, end the `node` process running `scripts\serve.mjs`.
+
+**Tailscale.** The server listens on 127.0.0.1 only. Tailscale publishes it to your tailnet over HTTPS (HTTPS matters: copying share links needs a secure page):
+
+```bash
+tailscale serve --bg --https=8443 http://127.0.0.1:4180
+```
+
+The app is then at `https://<machine>.<tailnet>.ts.net:8443/` from any device on the tailnet. The setting survives reboots. `tailscale serve status` lists it; `tailscale serve --https=8443 off` removes it.
+
+Settings and the source are saved per address, so `localhost:4180`, the Tailscale address and the dev server each remember their own.
+
 ## Layout of the code
 
 ```
