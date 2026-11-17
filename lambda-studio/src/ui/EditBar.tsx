@@ -19,15 +19,31 @@ const GROUPS: { label: string; ids: EditAction[] }[] = [
   { label: 'Name', ids: ['fold'] },
 ];
 
-/** The bar's height as --edit-bar-h on the root, so the page can keep that much room below it. */
+const BAR_VARS = ['--edit-bar-h', '--edit-bar-cx', '--edit-bar-maxw'];
+
+/**
+ * The bar's height as --edit-bar-h on the root, so the page can keep that much room below it; and
+ * the centre column's middle and width, so the bar sits over that column, not over the side panels.
+ */
 function useBarHeight() {
   const ro = useRef<ResizeObserver | null>(null);
-  useEffect(() => () => { ro.current?.disconnect(); document.documentElement.style.removeProperty('--edit-bar-h'); }, []);
+  const clear = () => BAR_VARS.forEach((v) => document.documentElement.style.removeProperty(v));
+  useEffect(() => () => { ro.current?.disconnect(); clear(); }, []);
   return useCallback((el: HTMLDivElement | null) => {
     ro.current?.disconnect();
-    if (!el) { document.documentElement.style.removeProperty('--edit-bar-h'); return; }
-    ro.current = new ResizeObserver(() => document.documentElement.style.setProperty('--edit-bar-h', `${Math.ceil(el.getBoundingClientRect().height)}px`));
+    if (!el) { clear(); return; }
+    const col = document.querySelector('.col-center');
+    const root = document.documentElement.style;
+    ro.current = new ResizeObserver(() => {
+      root.setProperty('--edit-bar-h', `${Math.ceil(el.getBoundingClientRect().height)}px`);
+      if (col) {
+        const c = col.getBoundingClientRect();
+        root.setProperty('--edit-bar-cx', `${Math.round(c.left + c.width / 2)}px`);
+        root.setProperty('--edit-bar-maxw', `${Math.round(c.width)}px`);
+      }
+    });
     ro.current.observe(el);
+    if (col) ro.current.observe(col);
   }, []);
 }
 
@@ -91,18 +107,17 @@ export function EditBar() {
     <div className="edit-bar" ref={barRef} role="toolbar" aria-label="Edit the selected subterm" onKeyDown={toolbarKeys}>
       <div className="edit-sel">
         <span className="muted">Selected:</span> <code title={describePath(selected)}>{shown}</code>
+        {selected !== '' && <IconButton icon={CornerLeftUp} className="small" text="Parent" label="Select the enclosing term" shortcut="↑" tip="above" onClick={() => select(selected.slice(0, -1))} />}
         <IconButton icon={X} className="small" label="Clear the selection" shortcut="Esc" tip="above" onClick={() => select(null)} />
       </div>
       <div className="edit-actions">
         {GROUPS.map((g) => (
-          <div key={g.label} className="edit-group" role="group" aria-label={g.label}>
-            <span className="edit-group-label" aria-hidden>{g.label}</span>
+          <div key={g.label} className="edit-group" role="group" aria-label={g.label} title={g.label}>
             {g.ids.map((id) => ACTIONS.find((a) => a.id === id)!).map((a) => (
               <button key={a.id} className={pending === a.id ? 'on' : ''} disabled={!ok.has(a.id)} title={a.title} onClick={() => start(a.id)}>{a.label}</button>
             ))}
           </div>
         ))}
-        {selected !== '' && <IconButton icon={CornerLeftUp} text="Parent" label="Select the enclosing term" shortcut="↑" tip="above" onClick={() => select(selected.slice(0, -1))} />}
       </div>
       {pending && (
         <form className="edit-input" onSubmit={(e) => { e.preventDefault(); finish(); }}>

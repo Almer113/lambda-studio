@@ -270,3 +270,20 @@ test('on a 375px phone the header, tabs and diagram tools fit; Input is in More;
   await expect(page.locator('.editor-panel')).toBeVisible();
   await expect(strip).toHaveCount(0);
 });
+
+test('the edit bar is one row over the centre column, clear of the legend; compact on a phone', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await open(page);
+  await setSource(page, 'PLUS 2 3');
+  await page.evaluate(() => (window as any).__store.getState().select('fa'));
+  const bar = page.locator('.edit-bar');
+  await expect(bar).toBeVisible();
+  await page.waitForTimeout(1000); // the bar fades in, then the column makes room
+  const [b, col, legend] = await Promise.all([bar, page.locator('.col-center'), page.locator('.legend')].map((l) => l.boundingBox()));
+  expect(b!.height).toBeLessThan(80);
+  expect(b!.x).toBeGreaterThanOrEqual(col!.x - 1);
+  expect(b!.x + b!.width).toBeLessThanOrEqual(col!.x + col!.width + 1);
+  expect(legend!.y + legend!.height).toBeLessThanOrEqual(b!.y);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await expect.poll(async () => (await bar.boundingBox())!.height).toBeLessThan(200);
+});

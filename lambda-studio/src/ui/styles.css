@@ -162,7 +162,10 @@ kbd { border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 
 .sw.hl-arg, rect.hl-arg { background: var(--hl-arg); fill: var(--hl-arg); }
 .sw.hl-link, rect.hl-link { background: var(--hl-link); fill: var(--hl-link); }
 /* the redex glow: soft colour around the lines, which keep their own colour */
-.halo rect { opacity: 0.45; }
+.halo rect { opacity: 0.8; }
+.halo rect.halo-gap { fill: var(--diagram-bg); opacity: 1; }
+:root[data-theme="dark"] .halo rect:not(.halo-gap) { opacity: 0.9; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .halo rect:not(.halo-gap) { opacity: 0.9; } }
 .sw.glow { width: 12px; height: 12px; border-radius: var(--r-sm); background: none; box-shadow: inset 0 0 0 3px var(--sw-c); }
 .sw.glow.hl-fn { --sw-c: color-mix(in srgb, var(--hl-fn) 55%, transparent); }
 .sw.glow.hl-arg { --sw-c: color-mix(in srgb, var(--hl-arg) 55%, transparent); }
@@ -328,18 +331,18 @@ rect.hl-drop { fill: var(--ok); opacity: 0.8; }
 .drop-hint { position: absolute; left: 8px; top: 6px; font-size: var(--fs-xs); background: var(--ok); color: var(--on-ok); padding: 2px 8px; border-radius: var(--r-sm); pointer-events: none; }
 /* The editing toolbar floats at the bottom of the window: in the page flow it pushed the diagram
    down between the two clicks of a double-click. */
-.edit-bar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 40; width: max-content; max-width: min(920px, calc(100vw - 32px)); box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; background: var(--panel); color: var(--text); border: 1px solid var(--accent); border-radius: var(--r-lg); box-shadow: 0 10px 30px rgb(0 0 0 / 0.25); }
+.edit-bar { position: fixed; left: var(--edit-bar-cx, 50%); bottom: 16px; transform: translateX(-50%); z-index: 40; width: max-content; max-width: min(920px, var(--edit-bar-maxw, calc(100vw - 32px))); box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; background: var(--panel); color: var(--text); border: 1px solid var(--accent); border-radius: var(--r-lg); box-shadow: 0 10px 30px rgb(0 0 0 / 0.25); }
 /* it appears once a double-click would be over: the click that selects may be the first half of
    a double-click that reduces, and the second half must not land on the toolbar */
 .edit-bar { animation: edit-bar-in 0.15s ease-out 0.4s both; }
 @keyframes edit-bar-in { from { opacity: 0; visibility: hidden; } to { opacity: 1; visibility: visible; } }
-body:has(.tutorial) .edit-bar { left: 16px; transform: none; max-width: calc(100vw - 380px - 48px); }
 .edit-bar .err { color: var(--danger); margin: 0; font-size: var(--fs-sm); }
 .edit-sel { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .edit-sel code { word-break: break-all; }
-.edit-actions { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
+.edit-actions { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+/* groups: Reduce | Wrap | Change | Name, told apart by a thin divider (the names are their labels) */
 .edit-group { display: inline-flex; gap: 4px; align-items: center; flex-wrap: wrap; }
-.edit-group-label { font-size: var(--fs-xs); color: var(--muted); margin-right: 2px; }
+.edit-group + .edit-group { border-left: 1px solid var(--border); padding-left: 5px; margin-left: 1px; }
 /* while the edit bar shows, the centre column keeps room below for it (after it has faded in, so
    nothing moves between the two clicks of a double-click) */
 .col-center { transition: padding-bottom 0s 0.45s; }
@@ -353,7 +356,9 @@ body:has(.edit-bar) .col-center { padding-bottom: calc(var(--edit-bar-h, 0px) + 
 
 /* --- tutorial, help, accessibility --- */
 .tutorial { position: fixed; right: 16px; bottom: 16px; width: min(380px, calc(100vw - 32px)); max-height: min(70vh, 560px); display: flex; flex-direction: column; background: var(--panel); color: var(--text); border: 1px solid var(--accent); border-radius: var(--r-lg); box-shadow: 0 10px 30px rgb(0 0 0 / 0.25); z-index: 50; }
-.tutorial.tut-left { right: auto; left: 16px; }
+.tutorial.tut-left { right: auto; left: 16px; } /* moved away from what it points at */
+/* below 1100px the right column is 320px: the drawer keeps to it, off the diagram */
+@media (min-width: 861px) and (max-width: 1100px) { .tutorial { width: 320px; right: 12px; } }
 .tut-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px 4px; }
 .tut-head h2 { margin: 0; font-size: var(--fs-lg); }
 .tut-head select { flex: 1; min-width: 0; }
@@ -516,7 +521,6 @@ button.linklike { background: none; border: 0; padding: 0; min-height: 0; color:
 @media (min-width: 1500px) {
   body:has(.tutorial) .layout { margin-right: 396px; }
   body:has(.tutorial) .tutorial { top: 64px; bottom: 16px; max-height: none; }
-  body:has(.tutorial) .edit-bar { max-width: calc(100vw - 396px - 48px); }
 }
 
 /* medium widths: the header menus drop their visible labels (they keep their accessible names) */
@@ -551,6 +555,8 @@ button.linklike { background: none; border: 0; padding: 0; min-height: 0; color:
 }
 @media (max-width: 639px) {
   .header-input { display: none; }
+  .edit-group { display: contents; }
+  .edit-group + .edit-group { border: 0; padding: 0; margin: 0; }
   .phone-only { display: block; }
 }
 @media (max-width: 400px) {

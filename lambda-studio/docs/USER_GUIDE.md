@@ -41,7 +41,7 @@ Paste a term in another notation and the input format is detected (the Input men
 
 ## Reducing
 
-- **Step** contracts one redex chosen by the **Strategy** menu in the header (normal order by default; the menu describes each strategy). The next redex is highlighted. In the text it is shaded. In the diagram it glows behind the lines, which keep their own colours: a pink glow for its function λ and that λ's variables, blue for the argument and yellow for the application link.
+- **Step** contracts one redex chosen by the **Strategy** menu in the header (normal order by default; the menu describes each strategy). The next redex is highlighted. In the text it is shaded. In the diagram it is outlined, with a thin gap so the outline stands apart from the lines, which keep their own colours: a pink outline for its function λ and that λ's variables, blue for the argument and yellow for the application link.
 - **Double-click** a redex in the text, the TeX view or the diagram to contract that one instead.
 - **Play** steps automatically at the chosen **Speed** (1 to 30 steps a second). **Run** reduces to normal form in the background, recording up to 2000 steps; **Normalize** uses a much faster engine with sharing and records only the result.
 - The **timeline** goes back to any earlier step. From there, Step and Play move forward along the recorded steps; contracting a redex of your choice (double-click, or β-reduce in the edit bar) starts a new branch, and Run or Normalize continue from that step and replace what came after it. An edit rewrites the source, so it starts a new timeline.
@@ -61,7 +61,7 @@ Each λ is a horizontal bar, each variable a vertical line from its binder's bar
 
 ## Building terms (the creator)
 
-Select a subterm by clicking it in the diagram or the current term (or press an arrow key with the diagram focused, then use ↑ ↓ ← → to move). With the diagram focused, Enter β-reduces the selection and Delete removes it. The edit bar appears at the bottom of the window, with its actions grouped as Reduce, Wrap, Change and Name; the page keeps room below so it does not cover the diagram. It offers:
+Select a subterm by clicking it in the diagram or the current term (or press an arrow key with the diagram focused, then use ↑ ↓ ← → to move). With the diagram focused, Enter β-reduces the selection and Delete removes it. The edit bar appears at the bottom of the window, over the centre column, with its actions in groups (Reduce, Wrap, Change, Name) divided by thin lines; **Parent** sits next to the selection. The page keeps room below so the bar does not cover the diagram. It offers:
 
 | Action | Effect |
 |---|---|

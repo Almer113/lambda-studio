@@ -448,6 +448,8 @@ export function DiagramView() {
               <g className={selection?.dim ? 'dimmed' : undefined}>
                 <g className="halo" pointerEvents="none">
                   {halo.map(({ s, cls }, k) => { const r = segmentRect(s); return <rect key={k} className={cls} x={r.x - HALO} y={r.y - HALO} width={r.w + 2 * HALO} height={r.h + 2 * HALO} rx={HALO} />; })}
+                  {/* a thin gap in the background colour, so the glow stands apart from a line of a similar colour */}
+                  {halo.map(({ s }, k) => { const r = segmentRect(s); return <rect key={'g' + k} className="halo-gap" x={r.x - GAP} y={r.y - GAP} width={r.w + 2 * GAP} height={r.h + 2 * GAP} />; })}
                 </g>
                 <g dangerouslySetInnerHTML={{ __html: baseHtml }} />
               </g>
@@ -479,7 +481,8 @@ export function DiagramView() {
 }
 
 /** How far the redex glow reaches past a line, in diagram units (lines are 1 unit wide, 1 apart). */
-const HALO = 0.45;
+const HALO = 0.42;
+const GAP = 0.12;
 
 /** The box around some segments, with a little room. */
 function boundsOf(segs: Segment[]): { x: number; y: number; w: number; h: number } | null {
