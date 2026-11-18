@@ -103,3 +103,20 @@ Choose a tool from the **Tool** menu. When the term suits another tool better (a
 **Settings** (the gear) holds the display options (numerals, how λt f.f is shown), the editor options and the limits for Run. Showing known parts by name is the tag button on **Current term**, the typeset preview is the eye button on **Source**, and the theme is the button at the right of the header (in the **⋯** menu on phones and tablets). Settings are kept in this browser; **Reset all settings** restores the defaults.
 
 **File › Copy share link** copies a URL with the source compressed into it (where the browser does not allow copying, the link is shown instead). Nothing is sent to a server: the whole app runs in your browser. Opening a share link replaces your source; the status bar then offers to restore the previous one, and the link is removed from the address bar so a later reload keeps your newer work.
+
+## Your own copy: starting, stopping and the Home Server Hub
+
+On this PC the app is served from the latest release in `deploy/` at `http://localhost:4180/`, and to your other devices at the Tailscale address on port 8443. It starts at logon. From the app folder you can control it yourself:
+
+| Command | What it does |
+|---|---|
+| `node scripts/server-control.mjs start` | Starts serving the current release in the background (no window). If it is already running, it says so and does nothing. If another program has port 4180, it says so and starts nothing. |
+| `node scripts/server-control.mjs stop` | Stops Lambda Studio's own server and nothing else. If it isn't running, it says so. |
+| `node scripts/server-control.mjs status` | Says whether it is running, since when and which release. Add `--json` for one line of JSON. |
+| `npm run deploy` | Builds a new release and switches the running server to it at once. |
+
+The server's log is `data/server.log` in the app folder.
+
+The **Home Server Hub** runs the same commands, listed in `hub.json`: its **Deploy** button runs `start` (it serves the current release; making a new one is still `npm run deploy`), **Stop** runs `stop`, and its card shows `status`. **View log** shows `data/server.log`, and **Open** and **On tailnet** open the two addresses above.
+
+On a phone or another computer, open the Tailscale address and install the app from the browser (**Install** in Chrome and Edge, *Add to Home screen* on Android, *Share › Add to Home Screen* in Safari). The installed app works offline and updates itself after each deploy. Settings and your source are kept separately for each address.
