@@ -8,3 +8,4 @@ dist-single/
 deploy/
 .deploy-next/
 .deploy-old/
+.claude/

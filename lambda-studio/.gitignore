@@ -1,3 +1,5 @@
 test-results/
 playwright-report/
 data/
+# this PC's Home Server Hub entry (its Tailscale name and local paths); the hub reads it from here
+hub.json
