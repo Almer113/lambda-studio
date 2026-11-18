@@ -1,5 +1,7 @@
 # Lambda Studio user guide
 
+**Open it:** <https://almer113.github.io/lambda-studio/>. It runs in your browser with nothing to install or sign up for, and your work stays on your device. To keep it as an app that works offline, see [Installing it](#installing-it-and-running-your-own-copy).
+
 New to the λ-calculus? The **Tutorial** (the graduation-cap button in the header) opens on your first visit as a drawer at the right (on tablets and phones, along the bottom): ten short lessons load examples and check your progress. When the drawer covers what a lesson points at, it moves to the other side. Press **?** for help, keyboard shortcuts, this guide and the notation reference.
 
 ## The screen

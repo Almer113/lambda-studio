@@ -13,6 +13,11 @@ A browser workbench for the untyped λ-calculus: write a term in almost any nota
 - **Guide:** [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
 - **Notations:** [docs/FORMATS.md](docs/FORMATS.md)
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshot-dark.png">
+  <img src="docs/assets/screenshot-light.png" alt="Lambda Studio reducing MULT 2 3, with its Tromp diagram and the next redex outlined" width="100%">
+</picture>
+
 ## The interface
 
 - **Header:** File, Examples, the input format and a **Strategy** button that names the current choice ("Normal order", "… + η"). On the right: Settings, the tutorial, help and the theme.
