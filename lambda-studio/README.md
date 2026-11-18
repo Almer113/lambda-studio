@@ -9,6 +9,7 @@
 
 A browser workbench for the untyped λ-calculus: write a term in almost any notation, step through its reduction, watch John Tromp's diagram of it change, convert it to other notations, and export the results.
 
+- **Try it:** <https://almer113.github.io/lambda-studio/> (nothing to install; it runs in your browser, and can be installed as an app that works offline)
 - **Guide:** [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
 - **Notations:** [docs/FORMATS.md](docs/FORMATS.md)
 
@@ -40,10 +41,18 @@ Light and dark themes follow the system or the theme button.
 
 ## Running it
 
+**Requirements:** [Node.js](https://nodejs.org) 20 or newer (it is developed on Node 24) and git. The browser tests also need Google Chrome (or Edge, with `PW_CHANNEL=msedge`).
+
 ```bash
+git clone https://github.com/Almer113/lambda-studio.git
+cd lambda-studio/lambda-studio
 npm install
 npm run dev            # http://localhost:5173
 ```
+
+The repository's top folder holds the research notes and the plan; the app is in `lambda-studio/`, and every command below runs there.
+
+**Getting updates:** `git pull`, then `npm install` (in case the dependencies changed), and restart `npm run dev`, or run `npm run deploy` for your own copy (below).
 
 | Command | What it does |
 |---|---|
@@ -54,6 +63,18 @@ npm run dev            # http://localhost:5173
 | `npm run build` | Production build in `dist/` |
 | `npm run build:single` | One self-contained `dist-single/index.html` (about 3 MB) that works offline, from a USB stick or as an e-mail attachment |
 
+## GitHub Pages
+
+The public site is built and published by `.github/workflows/pages.yml` (in the repository's top folder) on every push to `main`. The same workflow type-checks, runs the unit tests and builds on every push and pull request. The browser tests aren't run there, since they check layout widths with Windows fonts.
+
+The site lives under the repository's name, so the workflow builds with `BASE_PATH=/lambda-studio/`; icons, the manifest, the service worker and its file list all follow it. `SITE_URL` gives the link-preview image its full address. To build it the same way locally:
+
+```bash
+BASE_PATH=/lambda-studio/ SITE_URL=https://almer113.github.io/lambda-studio/ npx vite build
+```
+
+(In Git Bash on Windows, run that from PowerShell instead: Git Bash turns `/lambda-studio/` into a Windows path.)
+
 ## A permanent local copy (and Tailscale)
 
 The deployed copy is separate from the dev server: it serves a build kept in `deploy/`, so work in progress never breaks it.
@@ -63,7 +84,7 @@ The deployed copy is separate from the dev server: it serves a build kept in `de
 | `npm run deploy` | Type-check and build into `deploy/releases/<time>-<commit>/`, then point `deploy/current.txt` at it. The running server switches at once (no folder in use is renamed, which Windows refuses). The previous release is kept, older ones removed; `/version.txt` on the site names the live commit |
 | `npm run serve` | Serve the current release on `http://127.0.0.1:4180` (`--port`, `--host` to change). No dependencies; gzips text files and caches the hashed assets |
 
-**Starting and stopping it.** `node scripts/server-control.mjs start` serves the current release in the background (no window; log in `data/server.log`) and does nothing if it is already running. `stop` stops this app's server and nothing else, and `status` prints one line of JSON. The server records itself in `data/server-4180.json` (pid, start time and a random token) and answers `/api/health`; `stop` asks it to shut down with that token. These are the commands in `hub.json`, which lets the Home Server Hub show, start and stop the app.
+**Starting and stopping it.** `node scripts/server-control.mjs start` serves the current release in the background (no window; log in `data/server.log`) and does nothing if it is already running. `stop` stops this app's server and nothing else, and `status` prints one line of JSON. The server records itself in `data/server-4180.json` (pid, start time and a random token) and answers `/api/health`; `stop` asks it to shut down with that token. They follow the contract of a home "server hub" page: a `hub.json` beside this README lists them for it. That file names your own machine, so it is ignored by git and not in the repository.
 
 **Starting at logon (Windows).** `scripts/start-server.vbs` runs `server-control.mjs start` with no window. A shortcut to it in the Startup folder (`shell:startup`) runs it at logon.
 
@@ -75,7 +96,7 @@ tailscale serve --bg --https=8443 http://127.0.0.1:4180
 
 The app is then at `https://<machine>.<tailnet>.ts.net:8443/` from any device on the tailnet. The setting survives reboots. `tailscale serve status` lists it; `tailscale serve --https=8443 off` removes it.
 
-**Installing it as an app.** The site has a web app manifest ("Lambda Studio", with the Step λ icon) and a service worker, so Chrome and Edge offer **Install** in the address bar (on Android, *Add to Home screen*; on iOS Safari, *Share › Add to Home Screen*). Installing needs HTTPS, so use the Tailscale address (or `localhost` on this PC). The installed app opens in its own window and works offline: the service worker caches the whole build (`precache.json`, written by the build) and updates itself to the newest deploy on the next start. The icons in `public/`, the logos in `docs/assets/` and the header's wordmark (`src/ui/Wordmark.tsx`) are copied from the finished brand kit (the "Step λ" mark); they are not generated here.
+**Installing it as an app.** The site has a web app manifest ("Lambda Studio", with the Step λ icon) and a service worker, so Chrome and Edge offer **Install** in the address bar (on Android, *Add to Home screen*; on iOS Safari, *Share › Add to Home Screen*). Installing needs HTTPS, so use the Tailscale address (or `localhost` on the same computer). The installed app opens in its own window and works offline: the service worker caches the whole build (`precache.json`, written by the build) and updates itself to the newest deploy on the next start. The icons in `public/`, the logos in `docs/assets/` and the header's wordmark (`src/ui/Wordmark.tsx`) are copied from the finished brand kit (the "Step λ" mark); they are not generated here.
 
 Settings and the source are saved per address, so `localhost:4180`, the Tailscale address and the dev server each remember their own.
 
@@ -94,6 +115,10 @@ tests/             Vitest; tests/golden/tromp.json holds diagrams from Tromp's o
 e2e/               Playwright browser tests
 scripts/           make-golden.mjs regenerates the golden file (needs GHC and tromp/AIT)
 ```
+
+## Licence
+
+MIT: see [LICENSE](../LICENSE). The libraries it uses are MIT or ISC licensed; the wordmark is Archivo (SIL Open Font License), converted to outlines.
 
 ## Credits
 
