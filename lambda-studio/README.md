@@ -111,10 +111,12 @@ A plain `http://` address on the network is not a secure page, so there the brow
 **Tailscale.** Tailscale publishes the server to your tailnet over HTTPS, whichever `listen` setting it has (HTTPS matters: copying share links and installing the app need a secure page):
 
 ```bash
-tailscale serve --bg --https=8443 http://127.0.0.1:4180
+tailscale serve --bg --https=4180 http://127.0.0.1:4180
 ```
 
-The app is then at `https://<machine>.<tailnet>.ts.net:8443/` from any device on the tailnet. The setting survives reboots. `tailscale serve status` lists it; `tailscale serve --https=8443 off` removes it.
+The app is then at `https://<machine>.<tailnet>.ts.net:4180/` from any device on the tailnet: the same port number as the server, so the app has one port everywhere. (Serve, which is tailnet only, takes any port; only the public Funnel is limited to 443, 8443 and 10000.) Serve takes the port only on the computer's Tailscale address, so `localhost:4180` and the local-network address stay plain `http://`. Over Tailscale, though, plain `http://<machine>:4180/` then gets "400 Bad Request": use the `https://` address. The setting survives reboots. `tailscale serve status` lists it; `tailscale serve --https=4180 off` removes it.
+
+**Moving to a new address.** Each address keeps its own saved work (below), and an installed app stays tied to the address it was installed from. To carry your work over, use **File › Save workspace** on the old address and **Open workspace** on the new one (source, input format and settings), or **File › Copy share link** and open the link there (source and format only). Then install the app again from the new address and remove the old one. Keep the old address on until every device has moved.
 
 **Installing it as an app.** The site has a web app manifest ("Lambda Studio", with the Step λ icon) and a service worker, so Chrome and Edge offer **Install** in the address bar (on Android, *Add to Home screen*; on iOS Safari, *Share › Add to Home Screen*). Installing needs HTTPS, so use the Tailscale address (or `localhost` on the same computer). The installed app opens in its own window and works offline: the service worker caches the whole build (`precache.json`, written by the build) and updates itself to the newest deploy on the next start. The icons in `public/`, the logos in `docs/assets/` and the header's wordmark (`src/ui/Wordmark.tsx`) are copied from the finished brand kit (the "Step λ" mark); they are not generated here.
 

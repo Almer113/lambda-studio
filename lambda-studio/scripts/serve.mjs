@@ -111,8 +111,23 @@ function shutdown(code = 0) {
   setTimeout(() => process.exit(code), 2000).unref();
 }
 
-const server = createServer(async (req, res) => {
-  const apiPath = new URL(req.url ?? '/', 'http://x').pathname;
+/** The request's path. Prefixing the origin (not passing it as a base) keeps "//x" a path, so no
+ *  request line can make URL parsing throw; anything still unreadable gets a 400. */
+function pathOf(url) {
+  try { return new URL(`http://x${url?.startsWith('/') ? url : '/'}`).pathname; } catch { return null; }
+}
+
+const server = createServer((req, res) => {
+  handle(req, res).catch((e) => {
+    console.error(`${new Date().toISOString()} Lambda Studio: ${req.method} ${req.url}: ${e?.message ?? e}`);
+    if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'text/plain' }).end('Server error');
+    else res.destroy();
+  });
+});
+
+async function handle(req, res) {
+  const apiPath = pathOf(req.url);
+  if (apiPath === null) { res.writeHead(400, { 'Content-Type': 'text/plain' }).end('Bad request'); return; }
   if (apiPath === '/api/health' && (req.method === 'GET' || req.method === 'HEAD')) {
     const body = JSON.stringify({ ok: true, app: 'lambda-studio', pid: process.pid, since, version: release(), host, instance: managed ? instance : null });
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(req.method === 'HEAD' ? undefined : body);
@@ -125,7 +140,7 @@ const server = createServer(async (req, res) => {
     return;
   }
   if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405, { Allow: 'GET, HEAD' }).end(); return; }
-  const path = new URL(req.url ?? '/', 'http://x').pathname;
+  const path = apiPath;
   // the app has one page: unknown paths without an extension get index.html
   const root = await currentRoot();
   let f = (await fileFor(root, path)) ?? (extname(path) ? null : await fileFor(root, '/index.html'));
@@ -148,7 +163,7 @@ const server = createServer(async (req, res) => {
   res.writeHead(200, { ...headers, 'Content-Length': f.size });
   if (req.method === 'HEAD') { res.end(); return; }
   createReadStream(f.full).on('error', () => res.destroy()).pipe(res);
-});
+}
 
 server.on('error', (e) => { console.error(`${new Date().toISOString()} Lambda Studio server: ${e.message}`); process.exit(1); });
 server.listen(port, host, async () => {
