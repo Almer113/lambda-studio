@@ -116,10 +116,11 @@ You can also run your own copy from the source (see the README for setup). `npm 
 |---|---|
 | `node scripts/server-control.mjs start` | Starts serving the current release in the background (no window). If it is already running, it says so and does nothing. If another program has port 4180, it says so and starts nothing. |
 | `node scripts/server-control.mjs stop` | Stops Lambda Studio's own server and nothing else. If it isn't running, it says so. |
-| `node scripts/server-control.mjs status` | Says whether it is running, since when and which release. Add `--json` for one line of JSON. |
+| `node scripts/server-control.mjs status` | Says whether it is running, since when, which release, and who can reach it. Add `--json` for one line of JSON. |
+| `node scripts/server-control.mjs listen network` | Lets other devices on the local network open it too (`listen local` goes back to this computer only). It restarts the server if it is running. |
 | `npm run deploy` | Builds a new release and switches the running server to it at once. |
 
-The server's log is `data/server.log` in the app folder. On Windows, a shortcut to `scripts/start-server.vbs` in the Startup folder starts it at logon. The README explains how to reach it from your other devices through Tailscale.
+The server's log is `data/server.log` in the app folder. On Windows, a shortcut to `scripts/start-server.vbs` in the Startup folder starts it at logon. By default only this computer can open it. To let the other devices on your local network open it too, run `node scripts/server-control.mjs listen network` (and `listen local` to undo it). They then use `http://<this computer's address>:4180/`; on Windows the firewall must allow port 4180 on private networks. On such a plain `http://` address the app works, but the browser won't install it or keep it offline. The README explains this, and how to reach it securely from your other devices through Tailscale.
 
 **Running the commands from other tools.** A scheduled task, a script or a dashboard can run the same three commands. They never open a window or wait for a key press.
 - `start` and `stop` exit with 0 when they succeed, including when there was nothing to do. Otherwise they exit with 1, and their last line says why ("Port 4180 is used by another program.").

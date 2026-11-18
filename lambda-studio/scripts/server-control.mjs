@@ -4,6 +4,12 @@
 //   node scripts/server-control.mjs start    serve the current release in the background
 //   node scripts/server-control.mjs stop     stop this app's server, and nothing else
 //   node scripts/server-control.mjs status [--json]
+//   node scripts/server-control.mjs listen local|network   who can reach it (restarts it if running)
+//
+// "local" (the default) listens on 127.0.0.1: only this computer, and devices that come in through
+// `tailscale serve`. "network" listens on all addresses (0.0.0.0), so other devices on the local
+// network (and on the tailnet, by plain http) can open http://<this computer's address>:4180/.
+// The choice is kept in data/settings.json, which is local and not in git.
 //
 // How it knows the server is its own: serve.mjs writes data/server-4180.json (pid, start time and
 // a random token) once it is listening, and /api/health reports a hash of that token. A server
@@ -17,7 +23,7 @@
 
 import { spawn, execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, unlinkSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { request } from 'node:http';
 import { connect } from 'node:net';
 import { join } from 'node:path';
@@ -30,6 +36,13 @@ const serveScript = join(app, 'scripts', 'serve.mjs');
 const dataDir = join(app, 'data');
 const pidFile = join(dataDir, `server-${PORT}.json`);
 const logFile = join(dataDir, 'server.log');
+const settingsFile = join(dataDir, 'settings.json');
+const LISTEN = { local: '127.0.0.1', network: '0.0.0.0' };
+
+/** Who may reach the server: "local" or "network" (data/settings.json; "local" if unset). */
+function listenSetting() {
+  try { const v = JSON.parse(readFileSync(settingsFile, 'utf8')).listen; return v in LISTEN ? v : 'local'; } catch { return 'local'; }
+}
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const say = (line) => console.log(line);
@@ -96,7 +109,7 @@ async function state() {
   if (!(await portListening())) return { listening: false, file };
   const h = await health();
   if (file && h?.app === 'lambda-studio' && h.pid === file.pid && h.instance === hashOf(file.token)) {
-    return { listening: true, ours: true, answering: true, file, pid: h.pid, since: h.since, version: h.version };
+    return { listening: true, ours: true, answering: true, file, pid: h.pid, since: h.since, version: h.version, host: h.host };
   }
   if (!h && file && isOurProcess(file)) return { listening: true, ours: true, answering: false, file, pid: file.pid, since: file.since };
   return { listening: true, ours: false, file, other: h?.app === 'lambda-studio' ? 'a Lambda Studio server not started by this script' : 'another program' };
@@ -127,7 +140,8 @@ async function start() {
 
   mkdirSync(dataDir, { recursive: true });
   const log = openSync(logFile, 'a');
-  const child = spawn(process.execPath, [serveScript], { cwd: app, detached: true, windowsHide: true, stdio: ['ignore', log, log] });
+  const listen = listenSetting();
+  const child = spawn(process.execPath, [serveScript, '--host', LISTEN[listen]], { cwd: app, detached: true, windowsHide: true, stdio: ['ignore', log, log] });
   closeSync(log);
   let exited = null;
   child.once('exit', (code) => { exited = code ?? 1; });
@@ -137,7 +151,7 @@ async function start() {
     await sleep(200);
     if (exited !== null) fail(`The server stopped at once: ${lastLogLine() || `exit code ${exited}`}`);
     const now = await state();
-    if (now.ours && now.answering && now.pid === child.pid) { say(`Started Lambda Studio (pid ${child.pid}), serving release ${release} at http://${HOST}:${PORT}/.`); process.exit(0); }
+    if (now.ours && now.answering && now.pid === child.pid) { say(`Started Lambda Studio (pid ${child.pid}), serving release ${release} at http://${HOST}:${PORT}/${listen === 'network' ? ` and on the local network (port ${PORT})` : ''}.`); process.exit(0); }
   }
   fail(`The server did not start listening on port ${PORT} within 20 s: ${lastLogLine()}`);
 }
@@ -170,14 +184,24 @@ async function stop() {
 async function status(json) {
   const s = await state();
   const out = s.ours
-    ? { running: true, ours: true, pid: s.pid, since: s.since, version: s.version ?? currentRelease() ?? undefined, message: s.answering ? `Serving release ${s.version ?? currentRelease()}` : 'Running but not answering' }
+    ? { running: true, ours: true, pid: s.pid, since: s.since, version: s.version ?? currentRelease() ?? undefined, message: s.answering ? `Serving release ${s.version ?? currentRelease()}${s.host === LISTEN.network ? ' (this PC and the local network)' : ' (this PC only)'}` : 'Running but not answering' }
     : s.listening ? { running: false, ours: false, message: `Port ${PORT} is used by ${s.other}` } : { running: false };
   if (!json) say(s.ours ? `Lambda Studio is running (pid ${s.pid} since ${s.since}).` : s.listening ? `Lambda Studio is not running; port ${PORT} is used by ${s.other}.` : 'Lambda Studio is not running.');
   console.log(JSON.stringify(out));
+}
+
+async function setListen(value) {
+  if (!(value in LISTEN)) fail('Usage: node scripts/server-control.mjs listen local|network');
+  mkdirSync(dataDir, { recursive: true });
+  writeFileSync(settingsFile, JSON.stringify({ listen: value }, null, 2) + '\n');
+  say(value === 'network' ? `Lambda Studio will listen on all addresses: this PC and the local network (port ${PORT}).` : 'Lambda Studio will listen on 127.0.0.1: this PC only (and tailscale serve).');
+  const s = await state();
+  if (s.ours && s.answering && s.host !== LISTEN[value]) { await stop(); await start(); }
 }
 
 const [cmd, ...rest] = process.argv.slice(2);
 if (cmd === 'start') await start();
 else if (cmd === 'stop') await stop();
 else if (cmd === 'status') await status(rest.includes('--json'));
-else fail('Usage: node scripts/server-control.mjs start | stop | status [--json]');
+else if (cmd === 'listen') await setListen(rest[0]);
+else fail('Usage: node scripts/server-control.mjs start | stop | status [--json] | listen local|network');

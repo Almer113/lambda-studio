@@ -93,7 +93,22 @@ The deployed copy is separate from the dev server: it serves a build kept in `de
 
 **Starting at logon (Windows).** `scripts/start-server.vbs` runs `server-control.mjs start` with no window. A shortcut to it in the Startup folder (`shell:startup`) runs it at logon.
 
-**Tailscale.** The server listens on 127.0.0.1 only. Tailscale publishes it to your tailnet over HTTPS (HTTPS matters: copying share links needs a secure page):
+**Who can reach it.** By default the server listens on 127.0.0.1: only this computer. To open it to the other devices on your local network:
+
+```bash
+node scripts/server-control.mjs listen network   # all addresses; restarts the server if it is running
+node scripts/server-control.mjs listen local     # back to this computer only
+```
+
+The choice is kept in `data/settings.json` (local, not in git), so `start`, the Startup shortcut and any tool running `start` all use it. Other devices then open `http://<this computer's address>:4180/`. On Windows they also need the firewall to let port 4180 in on private networks. If Windows doesn't ask the first time, run this once in an administrator PowerShell:
+
+```powershell
+New-NetFirewallRule -DisplayName "Lambda Studio (port 4180)" -Direction Inbound -Protocol TCP -LocalPort 4180 -Action Allow -Profile Private
+```
+
+A plain `http://` address on the network is not a secure page, so there the browser won't install the app or keep it offline, and copying a share link shows the link instead. For those, use `localhost` on this computer, or the Tailscale address below.
+
+**Tailscale.** Tailscale publishes the server to your tailnet over HTTPS, whichever `listen` setting it has (HTTPS matters: copying share links and installing the app need a secure page):
 
 ```bash
 tailscale serve --bg --https=8443 http://127.0.0.1:4180

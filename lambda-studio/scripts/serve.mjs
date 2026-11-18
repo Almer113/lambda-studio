@@ -114,7 +114,7 @@ function shutdown(code = 0) {
 const server = createServer(async (req, res) => {
   const apiPath = new URL(req.url ?? '/', 'http://x').pathname;
   if (apiPath === '/api/health' && (req.method === 'GET' || req.method === 'HEAD')) {
-    const body = JSON.stringify({ ok: true, app: 'lambda-studio', pid: process.pid, since, version: release(), instance: managed ? instance : null });
+    const body = JSON.stringify({ ok: true, app: 'lambda-studio', pid: process.pid, since, version: release(), host, instance: managed ? instance : null });
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(req.method === 'HEAD' ? undefined : body);
     return;
   }
