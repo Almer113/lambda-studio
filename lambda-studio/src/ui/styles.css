@@ -64,6 +64,8 @@ kbd { border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 
 .header { display: flex; align-items: center; gap: 16px; padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--panel); flex-wrap: wrap; }
 .brand { font-weight: 700; font-size: var(--fs-lg); display: flex; align-items: center; gap: 8px; white-space: nowrap; }
 .logo { display: block; flex: none; width: 24px; height: 24px; color: var(--accent); }
+/* the outlined wordmark: 87 units tall with an 80-unit cap, so 12px gives the UI font's 11px cap */
+.brand-name { display: block; flex: none; height: 12px; width: auto; color: var(--text); }
 .check { display: inline-flex; gap: 6px; align-items: center; min-height: var(--h-sm); color: var(--muted); cursor: pointer; white-space: nowrap; }
 .check input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
 

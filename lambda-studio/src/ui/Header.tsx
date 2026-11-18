@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useStore, shareLink, DEFAULT_SETTINGS, type Theme } from './store';
 import { useExport } from './ExportDialog';
+import { Wordmark } from './Wordmark';
 import { STRATEGIES, type Strategy } from '../core/reduce';
 import { FORMATS, type FormatId } from '../core/program';
 import { EXAMPLES, EXAMPLE_GROUPS } from '../core/prelude';
@@ -189,7 +190,7 @@ export function Header() {
   const tutorialOpen = useTutorial((t) => t.open);
   return (
     <header className="header">
-      <div className="brand"><svg className="logo" viewBox="32 30 196 196" aria-hidden="true" focusable="false"><path fill="currentColor" d="M48 32H92V76H136V120H180V164H224V224H196V192H152V148L76 224H36L108 148V104H64V60H48Z" /></svg> <span className="brand-name">Lambda Studio</span></div>
+      <div className="brand"><svg className="logo" viewBox="32 30 196 196" aria-hidden="true" focusable="false"><path fill="currentColor" d="M48 32H92V76H136V120H180V164H224V224H196V192H152V148L76 224H36L108 148V104H64V60H48Z" /></svg> <Wordmark className="brand-name" /></div>
       <div className="header-group">
         <FileMenu />
         <ExamplesSelect />
