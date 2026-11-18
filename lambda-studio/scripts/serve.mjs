@@ -6,9 +6,15 @@
 // or the folder itself when there is no current.txt. It listens on 127.0.0.1 only: other devices
 // reach it through `tailscale serve`, which adds HTTPS (needed for clipboard access in the
 // browser). current.txt is checked on each request, so `npm run deploy` takes effect at once.
+//
+// When it serves deploy/, it also records itself for scripts/server-control.mjs (start, stop and
+// status for the Home Server Hub): data/server-<port>.json holds its pid, start time and a random
+// token, and is removed on exit. GET /api/health says whether it is up (and, by a hash of the
+// token, which server it is); POST /api/shutdown with the token in X-Lambda-Token stops it.
 
 import { createServer } from 'node:http';
-import { createReadStream } from 'node:fs';
+import { createReadStream, mkdirSync, readFileSync, unlinkSync, writeFileSync, renameSync } from 'node:fs';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { stat, readFile, readdir } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
 import { resolve, join, extname, sep } from 'node:path';
@@ -71,7 +77,53 @@ async function gzipped(f) {
   return buf;
 }
 
+// --- identity, health and shutdown (only when serving deploy/, the copy the hub controls) ---
+const managed = dirArg === undefined;
+const token = randomBytes(24).toString('hex');
+const instance = createHash('sha256').update(token).digest('hex').slice(0, 16);
+const since = new Date().toISOString();
+const pidFile = join(here, 'data', `server-${port}.json`);
+const release = () => { try { return readFileSync(join(base, 'current.txt'), 'utf8').trim() || null; } catch { return null; } };
+
+function writePidFile() {
+  if (!managed) return;
+  mkdirSync(join(here, 'data'), { recursive: true });
+  const body = JSON.stringify({ app: 'lambda-studio', pid: process.pid, since, port, token, script: fileURLToPath(import.meta.url) }) + '\n';
+  writeFileSync(pidFile + '.tmp', body);
+  renameSync(pidFile + '.tmp', pidFile);
+}
+function removePidFile() {
+  if (!managed) return;
+  try { if (JSON.parse(readFileSync(pidFile, 'utf8')).token === token) unlinkSync(pidFile); } catch { /* gone, or another server's */ }
+}
+const tokenOk = (given) => {
+  const a = Buffer.from(String(given ?? '')), b = Buffer.from(token);
+  return a.length === b.length && timingSafeEqual(a, b);
+};
+let stopping = false;
+function shutdown(code = 0) {
+  if (stopping) return;
+  stopping = true;
+  removePidFile();
+  console.log(`${new Date().toISOString()} Lambda Studio: stopping`);
+  server.close(() => process.exit(code));
+  server.closeAllConnections();
+  setTimeout(() => process.exit(code), 2000).unref();
+}
+
 const server = createServer(async (req, res) => {
+  const apiPath = new URL(req.url ?? '/', 'http://x').pathname;
+  if (apiPath === '/api/health' && (req.method === 'GET' || req.method === 'HEAD')) {
+    const body = JSON.stringify({ ok: true, app: 'lambda-studio', pid: process.pid, since, version: release(), instance: managed ? instance : null });
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(req.method === 'HEAD' ? undefined : body);
+    return;
+  }
+  if (apiPath === '/api/shutdown' && req.method === 'POST') {
+    if (!managed || !tokenOk(req.headers['x-lambda-token'])) { res.writeHead(403, { 'Content-Type': 'text/plain' }).end('Forbidden'); return; }
+    res.writeHead(202, { 'Content-Type': 'text/plain', Connection: 'close' }).end('Stopping');
+    setTimeout(() => shutdown(0), 50);
+    return;
+  }
   if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405, { Allow: 'GET, HEAD' }).end(); return; }
   const path = new URL(req.url ?? '/', 'http://x').pathname;
   // the app has one page: unknown paths without an extension get index.html
@@ -98,5 +150,10 @@ const server = createServer(async (req, res) => {
   createReadStream(f.full).on('error', () => res.destroy()).pipe(res);
 });
 
-server.on('error', (e) => { console.error(`Lambda Studio server: ${e.message}`); process.exit(1); });
-server.listen(port, host, async () => console.log(`${new Date().toISOString()} Lambda Studio: serving ${await currentRoot()} at http://${host}:${port}`));
+server.on('error', (e) => { console.error(`${new Date().toISOString()} Lambda Studio server: ${e.message}`); process.exit(1); });
+server.listen(port, host, async () => {
+  writePidFile();
+  console.log(`${new Date().toISOString()} Lambda Studio: serving ${await currentRoot()} at http://${host}:${port} (pid ${process.pid})`);
+});
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGBREAK', 'SIGHUP']) process.on(sig, () => shutdown(0));
+process.on('exit', removePidFile);

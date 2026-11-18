@@ -63,7 +63,9 @@ The deployed copy is separate from the dev server: it serves a build kept in `de
 | `npm run deploy` | Type-check and build into `deploy/releases/<time>-<commit>/`, then point `deploy/current.txt` at it. The running server switches at once (no folder in use is renamed, which Windows refuses). The previous release is kept, older ones removed; `/version.txt` on the site names the live commit |
 | `npm run serve` | Serve the current release on `http://127.0.0.1:4180` (`--port`, `--host` to change). No dependencies; gzips text files and caches the hashed assets |
 
-**Starting at logon (Windows).** `scripts/start-server.vbs` starts the server with no window and appends its log to `%LOCALAPPDATA%\LambdaStudio\server.log`. A shortcut to it in the Startup folder (`shell:startup`) runs it at logon. To stop the server, end the `node` process running `scripts\serve.mjs`.
+**Starting and stopping it.** `node scripts/server-control.mjs start` serves the current release in the background (no window; log in `data/server.log`) and does nothing if it is already running. `stop` stops this app's server and nothing else, and `status` prints one line of JSON. The server records itself in `data/server-4180.json` (pid, start time and a random token) and answers `/api/health`; `stop` asks it to shut down with that token. These are the commands in `hub.json`, which lets the Home Server Hub show, start and stop the app.
+
+**Starting at logon (Windows).** `scripts/start-server.vbs` runs `server-control.mjs start` with no window. A shortcut to it in the Startup folder (`shell:startup`) runs it at logon.
 
 **Tailscale.** The server listens on 127.0.0.1 only. Tailscale publishes it to your tailnet over HTTPS (HTTPS matters: copying share links needs a secure page):
 
