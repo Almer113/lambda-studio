@@ -53,8 +53,8 @@ The deployed copy is separate from the dev server: it serves a build kept in `de
 
 | Command | What it does |
 |---|---|
-| `npm run deploy` | Type-check, build into `.deploy-next/`, then swap it into `deploy/`. The running server picks it up at once; `deploy/version.txt` says which commit is live |
-| `npm run serve` | Serve `deploy/` on `http://127.0.0.1:4180` (`--port`, `--host` to change). No dependencies; gzips text files and caches the hashed assets |
+| `npm run deploy` | Type-check and build into `deploy/releases/<time>-<commit>/`, then point `deploy/current.txt` at it. The running server switches at once (no folder in use is renamed, which Windows refuses). The previous release is kept, older ones removed; `/version.txt` on the site names the live commit |
+| `npm run serve` | Serve the current release on `http://127.0.0.1:4180` (`--port`, `--host` to change). No dependencies; gzips text files and caches the hashed assets |
 
 **Starting at logon (Windows).** `scripts/start-server.vbs` starts the server with no window and appends its log to `%LOCALAPPDATA%\LambdaStudio\server.log`. A shortcut to it in the Startup folder (`shell:startup`) runs it at logon. To stop the server, end the `node` process running `scripts\serve.mjs`.
 
@@ -65,6 +65,8 @@ tailscale serve --bg --https=8443 http://127.0.0.1:4180
 ```
 
 The app is then at `https://<machine>.<tailnet>.ts.net:8443/` from any device on the tailnet. The setting survives reboots. `tailscale serve status` lists it; `tailscale serve --https=8443 off` removes it.
+
+**Installing it as an app.** The site has a web app manifest ("Lambda Studio", with the λ icon) and a service worker, so Chrome and Edge offer **Install** in the address bar (on Android, *Add to Home screen*; on iOS Safari, *Share › Add to Home Screen*). Installing needs HTTPS, so use the Tailscale address (or `localhost` on this PC). The installed app opens in its own window and works offline: the service worker caches the whole build (`precache.json`, written by the build) and updates itself to the newest deploy on the next start. The icons are drawn by `node scripts/make-icons.mjs` into `public/`.
 
 Settings and the source are saved per address, so `localhost:4180`, the Tailscale address and the dev server each remember their own.
 

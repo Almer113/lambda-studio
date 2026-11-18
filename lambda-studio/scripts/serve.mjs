@@ -2,13 +2,14 @@
 //
 //   node scripts/serve.mjs [dir] [--port 4180] [--host 127.0.0.1]
 //
-// Serves `deploy/` by default. It listens on 127.0.0.1 only: other devices reach it through
-// `tailscale serve`, which adds HTTPS (needed for clipboard access in the browser). Files are read
-// per request, so `npm run deploy` takes effect without a restart.
+// Serves `deploy/` by default: the release that deploy/current.txt names (deploy/releases/<name>/),
+// or the folder itself when there is no current.txt. It listens on 127.0.0.1 only: other devices
+// reach it through `tailscale serve`, which adds HTTPS (needed for clipboard access in the
+// browser). current.txt is checked on each request, so `npm run deploy` takes effect at once.
 
 import { createServer } from 'node:http';
 import { createReadStream } from 'node:fs';
-import { stat, readFile } from 'node:fs/promises';
+import { stat, readFile, readdir } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
 import { resolve, join, extname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,7 +18,26 @@ const args = process.argv.slice(2);
 const opt = (name, dflt) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : dflt; };
 const here = fileURLToPath(new URL('..', import.meta.url));
 const dirArg = args.find((a, i) => !a.startsWith('--') && !args[i - 1]?.startsWith('--'));
-const root = resolve(here, dirArg ?? 'deploy');
+const base = resolve(here, dirArg ?? 'deploy');
+
+/** The folder to serve: the current release, re-read when current.txt changes. */
+let current = { mtime: -1, root: base };
+async function currentRoot() {
+  try {
+    const s = await stat(join(base, 'current.txt'));
+    if (s.mtimeMs !== current.mtime) {
+      const name = (await readFile(join(base, 'current.txt'), 'utf8')).trim();
+      current = { mtime: s.mtimeMs, root: join(base, 'releases', name) };
+    }
+  } catch { current = { mtime: -1, root: base }; }
+  return current.root;
+}
+
+/** Other releases, newest first: a page still open from the previous deploy may ask for its own chunks. */
+async function otherRoots(root) {
+  try { return (await readdir(join(base, 'releases'))).sort().reverse().map((r) => join(base, 'releases', r)).filter((r) => r !== root); }
+  catch { return []; }
+}
 const port = Number(opt('port', process.env.PORT ?? 4180));
 const host = opt('host', process.env.HOST ?? '127.0.0.1');
 
@@ -28,7 +48,7 @@ const TYPES = {
   '.ttf': 'font/ttf', '.wasm': 'application/wasm', '.txt': 'text/plain; charset=utf-8', '.webmanifest': 'application/manifest+json',
 };
 
-async function fileFor(urlPath) {
+async function fileFor(root, urlPath) {
   let p;
   try { p = decodeURIComponent(urlPath.split('?')[0]); } catch { return null; }
   const full = resolve(join(root, p));
@@ -55,7 +75,9 @@ const server = createServer(async (req, res) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405, { Allow: 'GET, HEAD' }).end(); return; }
   const path = new URL(req.url ?? '/', 'http://x').pathname;
   // the app has one page: unknown paths without an extension get index.html
-  const f = (await fileFor(path)) ?? (extname(path) ? null : await fileFor('/index.html'));
+  const root = await currentRoot();
+  let f = (await fileFor(root, path)) ?? (extname(path) ? null : await fileFor(root, '/index.html'));
+  if (!f && path.startsWith('/assets/')) for (const r of await otherRoots(root)) { if ((f = await fileFor(r, path))) break; }
   if (!f) { res.writeHead(404, { 'Content-Type': 'text/plain' }).end('Not found'); return; }
   const hashed = path.startsWith('/assets/'); // Vite names these by content hash
   const type = TYPES[extname(f.full).toLowerCase()] ?? 'application/octet-stream';
@@ -77,4 +99,4 @@ const server = createServer(async (req, res) => {
 });
 
 server.on('error', (e) => { console.error(`Lambda Studio server: ${e.message}`); process.exit(1); });
-server.listen(port, host, () => console.log(`${new Date().toISOString()} Lambda Studio: serving ${root} at http://${host}:${port}`));
+server.listen(port, host, async () => console.log(`${new Date().toISOString()} Lambda Studio: serving ${await currentRoot()} at http://${host}:${port}`));
