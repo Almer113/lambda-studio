@@ -189,7 +189,7 @@ export function Header() {
   const tutorialOpen = useTutorial((t) => t.open);
   return (
     <header className="header">
-      <div className="brand"><span className="logo" aria-hidden>λ</span> <span className="brand-name">Lambda Studio</span></div>
+      <div className="brand"><svg className="logo" viewBox="32 30 196 196" aria-hidden="true" focusable="false"><path fill="currentColor" d="M48 32H92V76H136V120H180V164H224V224H196V192H152V148L76 224H36L112 148H108V104H64V60H48Z" /></svg> <span className="brand-name">Lambda Studio</span></div>
       <div className="header-group">
         <FileMenu />
         <ExamplesSelect />

@@ -1,3 +1,10 @@
+<p>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/lockup-horizontal-dark.svg">
+    <img src="docs/assets/lockup-horizontal.svg" alt="Lambda Studio" width="360">
+  </picture>
+</p>
+
 # Lambda Studio
 
 A browser workbench for the untyped λ-calculus: write a term in almost any notation, step through its reduction, watch John Tromp's diagram of it change, convert it to other notations, and export the results.
@@ -66,7 +73,7 @@ tailscale serve --bg --https=8443 http://127.0.0.1:4180
 
 The app is then at `https://<machine>.<tailnet>.ts.net:8443/` from any device on the tailnet. The setting survives reboots. `tailscale serve status` lists it; `tailscale serve --https=8443 off` removes it.
 
-**Installing it as an app.** The site has a web app manifest ("Lambda Studio", with the λ icon) and a service worker, so Chrome and Edge offer **Install** in the address bar (on Android, *Add to Home screen*; on iOS Safari, *Share › Add to Home Screen*). Installing needs HTTPS, so use the Tailscale address (or `localhost` on this PC). The installed app opens in its own window and works offline: the service worker caches the whole build (`precache.json`, written by the build) and updates itself to the newest deploy on the next start. The icons are drawn by `node scripts/make-icons.mjs` into `public/`.
+**Installing it as an app.** The site has a web app manifest ("Lambda Studio", with the Step λ icon) and a service worker, so Chrome and Edge offer **Install** in the address bar (on Android, *Add to Home screen*; on iOS Safari, *Share › Add to Home Screen*). Installing needs HTTPS, so use the Tailscale address (or `localhost` on this PC). The installed app opens in its own window and works offline: the service worker caches the whole build (`precache.json`, written by the build) and updates itself to the newest deploy on the next start. The icons in `public/` and the logos in `docs/assets/` are copied from the finished brand kit (the "Step λ" mark); they are not generated here.
 
 Settings and the source are saved per address, so `localhost:4180`, the Tailscale address and the dev server each remember their own.
 

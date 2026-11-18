@@ -9,8 +9,8 @@
 // after each page load, so the cache holds exactly the current build: new files are fetched, files
 // of earlier deploys are dropped, and parts of the app not opened yet still work offline.
 
-const CACHE = 'lambda-studio-v1';
-const SHELL = ['/', '/manifest.webmanifest', '/icon.svg', '/icon-192.png', '/icon-512.png'];
+const CACHE = 'lambda-studio-v2';
+const SHELL = ['/', '/manifest.webmanifest', '/icon.svg', '/favicon.ico', '/favicon-32.png', '/icon-192.png', '/icon-512.png'];
 
 async function syncBuild() {
   const cache = await caches.open(CACHE);
