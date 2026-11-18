@@ -1,5 +1,5 @@
-// Start, stop and check the deployed server (scripts/serve.mjs on 127.0.0.1:4180), for the Home
-// Server Hub (hub.json) and the Startup shortcut (scripts/start-server.vbs).
+// Start, stop and check the deployed server (scripts/serve.mjs on 127.0.0.1:4180), from the
+// command line, the Startup shortcut (scripts/start-server.vbs) or any tool that runs commands.
 //
 //   node scripts/server-control.mjs start    serve the current release in the background
 //   node scripts/server-control.mjs stop     stop this app's server, and nothing else
@@ -11,6 +11,9 @@
 // only if that pid's command line is still serve.mjs started at the recorded time, is it killed.
 // Anything else on the port is left alone. `npm run deploy` still makes releases; start only
 // serves whichever release deploy/current.txt names.
+//
+// No prompts and no window; start and stop exit 0 on success and print a one-line reason otherwise.
+// When a caller sets HUB_RUN=1, start also prints "::hub-step" progress markers for it.
 
 import { spawn, execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -113,7 +116,7 @@ function currentRelease() {
 }
 
 async function start() {
-  say('::hub-step start Start');
+  if (process.env.HUB_RUN === '1') say('::hub-step start Start');
   const s = await state();
   if (s.ours && s.answering) { say(`Lambda Studio is already running (pid ${s.pid}, release ${s.version ?? 'unknown'}).`); return; }
   if (s.ours) fail(`Lambda Studio's server (pid ${s.pid}) is running but not answering; stop it first.`);

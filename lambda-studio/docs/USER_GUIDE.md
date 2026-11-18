@@ -119,6 +119,6 @@ You can also run your own copy from the source (see the README for setup). `npm 
 | `node scripts/server-control.mjs status` | Says whether it is running, since when and which release. Add `--json` for one line of JSON. |
 | `npm run deploy` | Builds a new release and switches the running server to it at once. |
 
-The server's log is `data/server.log` in the app folder. On Windows, a shortcut to `scripts/start-server.vbs` in the Startup folder starts it at logon. The README explains how to reach it from your other devices through Tailscale, and how a home "server hub" page can start and stop it with the same commands (its **Deploy** runs `start`, which serves the current release; making a new one is still `npm run deploy`).
+The server's log is `data/server.log` in the app folder. On Windows, a shortcut to `scripts/start-server.vbs` in the Startup folder starts it at logon. The README explains how to reach it from your other devices through Tailscale.
 
 Settings and your source are kept separately for each address: the public site and your own copy each remember their own, and an installed app shares them with the site it was installed from.

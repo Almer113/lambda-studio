@@ -8,7 +8,7 @@
 // browser). current.txt is checked on each request, so `npm run deploy` takes effect at once.
 //
 // When it serves deploy/, it also records itself for scripts/server-control.mjs (start, stop and
-// status for the Home Server Hub): data/server-<port>.json holds its pid, start time and a random
+// status): data/server-<port>.json holds its pid, start time and a random
 // token, and is removed on exit. GET /api/health says whether it is up (and, by a hash of the
 // token, which server it is); POST /api/shutdown with the token in X-Lambda-Token stops it.
 
@@ -77,7 +77,7 @@ async function gzipped(f) {
   return buf;
 }
 
-// --- identity, health and shutdown (only when serving deploy/, the copy the hub controls) ---
+// --- identity, health and shutdown (only when serving deploy/, the copy server-control.mjs manages) ---
 const managed = dirArg === undefined;
 const token = randomBytes(24).toString('hex');
 const instance = createHash('sha256').update(token).digest('hex').slice(0, 16);
