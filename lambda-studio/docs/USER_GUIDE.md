@@ -121,4 +121,9 @@ You can also run your own copy from the source (see the README for setup). `npm 
 
 The server's log is `data/server.log` in the app folder. On Windows, a shortcut to `scripts/start-server.vbs` in the Startup folder starts it at logon. The README explains how to reach it from your other devices through Tailscale.
 
+**Running the commands from other tools.** A scheduled task, a script or a dashboard can run the same three commands. They never open a window or wait for a key press.
+- `start` and `stop` exit with 0 when they succeed, including when there was nothing to do. Otherwise they exit with 1, and their last line says why ("Port 4180 is used by another program.").
+- `status --json` always exits with 0, and its last line is one line of JSON, for example `{"running":true,"ours":true,"pid":1234,"since":"…","version":"…"}`. When the server isn't running it is `{"running":false}`. When another program has the port it is `{"running":false,"ours":false}`.
+- To check that the server answers, use `http://localhost:4180/api/health`. It returns a small JSON reply and changes nothing.
+
 Settings and your source are kept separately for each address: the public site and your own copy each remember their own, and an installed app shares them with the site it was installed from.
