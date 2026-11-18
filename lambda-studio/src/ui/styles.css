@@ -246,7 +246,7 @@ rect.hl-hover { fill: var(--hl-hover); }
   .app[data-tab="convert"] .col-right, .app[data-tab="tools"] .col-right { display: flex; }
   .app[data-tab="library"] .col-center, .app[data-tab="convert"] .col-center, .app[data-tab="tools"] .col-center { display: none; }
   .app[data-tab="tools"] .inspector { display: none; }
-  .side-tabs { display: none; } /* the section tabs choose Notations or Tools */
+  .side-panel > .side-tabs { display: none; } /* the section tabs choose Notations or Tools */
   .app[data-tab="edit"] .diagram-panel { display: none; }
   .app[data-tab="diagram"] .editor-panel { display: none; }
   .diagram-panel { min-height: 420px; }

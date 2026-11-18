@@ -99,6 +99,8 @@ export function App() {
   const setSetting = useStore((s) => s.setSetting);
   const phone = useMedia('(max-width: 639px)');
   const sideActive = !phone || tab === 'tools' || tab === 'convert';
+  // the phone's Diagram tab: the diagram right under the controls, the current term after it
+  const diagramFirst = phone && tab === 'diagram';
   const setTab = (t: MobileTab) => {
     setTabState(t);
     if (t === 'tools') setSetting('sideTab', 'tools');
@@ -124,8 +126,9 @@ export function App() {
           </div>
           {phone && tab === 'diagram' && <SourceStrip onEdit={() => setTab('edit')} />}
           <Guard name="Controls"><Controls /></Guard>
-          <Guard name="Current term"><CurrentTerm /></Guard>
+          {!diagramFirst && <Guard name="Current term"><CurrentTerm /></Guard>}
           <Guard name="Tromp diagram"><DiagramView /></Guard>
+          {diagramFirst && <Guard name="Current term"><CurrentTerm /></Guard>}
         </section>
         <aside className="col-right">
           <Guard name="Inspector"><Inspector /></Guard>

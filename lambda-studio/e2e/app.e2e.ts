@@ -271,6 +271,27 @@ test('on a 375px phone the header, tabs and diagram tools fit; Input is in More;
   await expect(strip).toHaveCount(0);
 });
 
+test('on a phone the Diagram tab puts the diagram before the current term, and Notations has no second Tools switch', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await open(page);
+  await page.getByRole('tab', { name: 'Diagram', exact: true }).click();
+  const diagram = (await page.locator('.diagram-panel').boundingBox())!;
+  const current = (await page.locator('.panel.current').boundingBox())!;
+  expect(diagram.y).toBeLessThan(current.y);
+  expect(diagram.y).toBeLessThan(844 / 2); // it starts in the top half of the screen
+  // Edit keeps the current term under the controls
+  await page.getByRole('tab', { name: 'Edit', exact: true }).click();
+  await expect(page.locator('.panel.current')).toBeVisible();
+  // Notations and Tools are chosen by the section tabs, not a second switch
+  await page.getByRole('tab', { name: 'Notations', exact: true }).click();
+  await expect(page.locator('.side-panel .side-tabs')).toBeHidden();
+  await page.getByRole('tab', { name: 'Tools', exact: true }).click();
+  await expect(page.locator('.side-panel .side-tabs')).toBeHidden();
+  // the Library tab still switches between Library and Encode data
+  await page.getByRole('tab', { name: 'Library', exact: true }).click();
+  await expect(page.locator('.left-panel .side-tabs')).toBeVisible();
+});
+
 test('the edit bar is one row over the centre column, clear of the legend; compact on a phone', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await open(page);

@@ -32,7 +32,7 @@ A browser workbench for the untyped λ-calculus: write a term in almost any nota
 - **Phones:**
   - Sections are tabs: Edit, Diagram, Tools, Notations and Library.
   - The input format and strategy are in the **⋯** menu.
-  - The Diagram tab shows the source as a strip you can expand.
+  - The Diagram tab shows the source as a strip you can expand, then the controls and the diagram, with the current term below it.
   - The diagram toolbar fits on one row, with the rest in its own **⋯** menu.
 - **Tutorial:** opens on the first visit, as a drawer on the right that moves aside when it covers what a lesson points at.
 
