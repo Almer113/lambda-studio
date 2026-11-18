@@ -15,7 +15,9 @@ New to the λ-calculus? The **Tutorial** (the graduation-cap button in the heade
 | **Inspector** (right) | Status, decoded value, size, BLC bits, closedness and the simple type. |
 | **Notations · Tools** (right, tabs) | Notations: the current term in every notation. One TeX/Text switch at the top typesets the λ notations; their copy menu copies as text or as LaTeX. Tools: pick one from the Tool menu: Expression → λ, truth tables, number tables, laws, data types, generators. |
 
-The header holds the **File** menu (new, open and save a workspace, copy a share link, export), the **Examples** menu (grouped by topic, with one example for each input notation), the **Input** format and the **Strategy** button, which names the current choice ("Normal order", or "Normal order + η") and opens the strategies with a line on each. On the right: **Settings** (gear), the tutorial, help and the theme.
+The header starts with the Lambda Studio logo: a λ whose long stroke is a staircase, for reduction one step at a time, followed by the name. On screens 1100 pixels wide or less only the λ is shown. The same mark is the browser tab's icon and the icon of the installed app. It is only the logo, not a button.
+
+Then the header holds the **File** menu (new, open and save a workspace, copy a share link, export), the **Examples** menu (grouped by topic, with one example for each input notation), the **Input** format and the **Strategy** button, which names the current choice ("Normal order", or "Normal order + η") and opens the strategies with a line on each. On the right: **Settings** (gear), the tutorial, help and the theme.
 
 On medium-width screens the Input menu drops its visible label (it says what it is). On a tablet (640 to 860 pixels wide) the page has two columns: the source, term and diagram on the left; the inspector, Notations, Tools, Library and Encode data on the right. The strategy, tutorial, help and theme move into the **⋯** menu, and the diagram toolbar keeps to one row (see below).
 
