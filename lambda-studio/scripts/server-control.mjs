@@ -1,5 +1,5 @@
 // Start, stop and check the deployed server (scripts/serve.mjs on 127.0.0.1:4180), from the
-// command line, the Startup shortcut (scripts/start-server.vbs) or any tool that runs commands.
+// command line, scripts/start-server.vbs (no window) or any tool that runs commands.
 //
 //   node scripts/server-control.mjs start    serve the current release in the background
 //   node scripts/server-control.mjs stop     stop this app's server, and nothing else

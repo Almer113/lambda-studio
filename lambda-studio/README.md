@@ -91,7 +91,7 @@ The deployed copy is separate from the dev server: it serves a build kept in `de
 
 **Starting and stopping it.** `node scripts/server-control.mjs start` serves the current release in the background (no window; log in `data/server.log`) and does nothing if it is already running. `stop` stops this app's server and nothing else, and `status` prints one line of JSON. The server records itself in `data/server-4180.json` (pid, start time and a random token) and answers `/api/health`; `stop` asks it to shut down with that token. All three can be run by other tools too: they need no window or keyboard, and `start` and `stop` exit 0 on success and print a one-line reason otherwise.
 
-**Starting at logon (Windows).** `scripts/start-server.vbs` runs `server-control.mjs start` with no window. A shortcut to it in the Startup folder (`shell:startup`) runs it at logon.
+**Starting it without a window, or at logon (Windows).** Double-click `scripts/start-server.vbs`: it runs `server-control.mjs start` with no window. Nothing starts the server at logon unless you set that up. Either put a shortcut to `start-server.vbs` in the Startup folder (`shell:startup`), or have whatever already starts your other programs run `node scripts/server-control.mjs start` in the app folder. Use one or the other; running both is harmless, since `start` does nothing when the server is already running.
 
 **Who can reach it.** By default the server listens on 127.0.0.1: only this computer. To open it to the other devices on your local network:
 
@@ -100,7 +100,7 @@ node scripts/server-control.mjs listen network   # all addresses; restarts the s
 node scripts/server-control.mjs listen local     # back to this computer only
 ```
 
-The choice is kept in `data/settings.json` (local, not in git), so `start`, the Startup shortcut and any tool running `start` all use it. Other devices then open `http://<this computer's address>:4180/`. On Windows they also need the firewall to let port 4180 in on private networks. If Windows doesn't ask the first time, run this once in an administrator PowerShell:
+The choice is kept in `data/settings.json` (local, not in git), so `start` uses it however it is run. Other devices then open `http://<this computer's address>:4180/`. On Windows they also need the firewall to let port 4180 in on private networks. If Windows doesn't ask the first time, run this once in an administrator PowerShell:
 
 ```powershell
 New-NetFirewallRule -DisplayName "Lambda Studio (port 4180)" -Direction Inbound -Protocol TCP -LocalPort 4180 -Action Allow -Profile Private
